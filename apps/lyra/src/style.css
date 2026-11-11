@@ -64,10 +64,9 @@ window.lyra-window .big-title { font-size: 1.85em; font-weight: 600; letter-spac
 window.lyra-window .lyrics { font-size: 1.3em; font-weight: 500; line-height: 1.5; }
 
 /* Sign-in */
-window.lyra-window .signin-title { font-size: 1.85em; font-weight: 600; letter-spacing: -0.02em; }
-window.lyra-window .signin-icon { color: @theme_accent; margin-bottom: 8px; }
-window.lyra-window .web-card { border-radius: 15px; background: @theme_popover; box-shadow: 0 0 0 1px alpha(@theme_text, 0.08), 0 16px 40px alpha(@theme_shadow, 0.45); }
-window.lyra-window .web-origin { padding: 10px 12px; }
+window.lyra-window .signin-strip { padding: 10px 16px; border-bottom: 1px solid alpha(@theme_text, 0.08); }
+window.lyra-window .signin-lock { color: @theme_accent; -gtk-icon-size: 18px; }
+window.lyra-window .signin-title { font-weight: 600; }
 
 /* The sidebar's playlist covers */
 window.lyra-window .nav-art { border-radius: 5px; }

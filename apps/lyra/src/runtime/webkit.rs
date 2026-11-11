@@ -3,7 +3,7 @@
 //! open in the browser. Popups and permission requests are refused.
 
 use super::{Event, Load, Reply, RequestError, Runtime};
-use gtk::{gio, prelude::*};
+use gtk::{gio, glib, prelude::*};
 use nyx_lyra_core::bridge;
 use nyx_lyra_core::command::CommandId;
 use nyx_lyra_core::youtube::{Request, valid_id};
@@ -29,6 +29,7 @@ const SIGN_IN: &str = "https://accounts.google.com/ServiceLogin?ltmpl=music&serv
 
 pub struct WebRuntime {
     view: webkit6::WebView,
+    session: webkit6::NetworkSession,
     on_event: Rc<dyn Fn(Event)>,
 }
 
@@ -129,7 +130,7 @@ impl WebRuntime {
             eprintln!("nyx-lyra: the web process ended ({reason:?})");
             ev(Event::Ended { again: e.len() <= MAX_ENDS });
         });
-        Rc::new(Self { view, on_event })
+        Rc::new(Self { view, session, on_event })
     }
 }
 
@@ -181,7 +182,7 @@ impl Runtime for WebRuntime {
             Load::Home => true,
             Load::Watch { video_id, playlist_id, .. } => valid_id(video_id) && playlist_id.as_deref().is_none_or(valid_id),
             Load::List { playlist_id } => valid_id(playlist_id),
-            Load::SignIn => true,
+            Load::SignIn { .. } => true,
         };
         if !ok {
             eprintln!("nyx-lyra: refused to load {target:?}");
@@ -200,7 +201,7 @@ impl Runtime for WebRuntime {
                 u
             }
             Load::List { playlist_id } => format!("{HOME}watch?list={playlist_id}"),
-            Load::SignIn => SIGN_IN.to_string(),
+            Load::SignIn { email } => sign_in_uri(email.as_deref()),
         };
         self.view.load_uri(&uri);
     }
@@ -215,5 +216,38 @@ impl Runtime for WebRuntime {
 
     fn terminate(&self) {
         self.view.terminate_web_process();
+    }
+
+    fn sign_out(&self, done: Box<dyn FnOnce()>) {
+        let Some(data) = self.session.website_data_manager() else { return done() };
+        // The callback runs on this (the main) thread; WebKit's binding asks for Send anyway.
+        let done = glib::thread_guard::ThreadGuard::new(done);
+        data.clear(webkit6::WebsiteDataTypes::ALL, glib::TimeSpan(0), gio::Cancellable::NONE, move |r| {
+            if let Err(e) = r {
+                eprintln!("nyx-lyra: couldn't clear the web session: {e}");
+            }
+            (done.into_inner())()
+        });
+    }
+}
+
+/// Google's sign-in page, with the account's email filled in when it's known.
+fn sign_in_uri(email: Option<&str>) -> String {
+    match email {
+        Some(e) => format!("{SIGN_IN}&Email={}", glib::Uri::escape_string(e, None, false)),
+        None => SIGN_IN.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sign_in_uri_encodes_the_email() {
+        assert_eq!(sign_in_uri(None), SIGN_IN);
+        let uri = sign_in_uri(Some("ken+music@gmail.com&continue=https://evil.example"));
+        assert!(uri.starts_with(SIGN_IN));
+        assert!(uri.ends_with("&Email=ken%2Bmusic%40gmail.com%26continue%3Dhttps%3A%2F%2Fevil.example"));
     }
 }

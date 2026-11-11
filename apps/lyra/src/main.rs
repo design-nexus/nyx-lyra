@@ -1,5 +1,6 @@
 //! Lyra: YouTube Music for NyxOS.
 
+mod accounts;
 mod art;
 mod cache;
 mod control;

@@ -22,8 +22,11 @@ pub enum Load {
     List {
         playlist_id: String,
     },
-    /// Google's sign-in page for YouTube Music (where its own Sign in button leads).
-    SignIn,
+    /// Google's sign-in page for YouTube Music (where its own Sign in button leads), at the
+    /// password step when the account's email is known.
+    SignIn {
+        email: Option<String>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -78,4 +81,6 @@ pub trait Runtime {
     fn widget(&self) -> gtk::Widget;
     /// End the web process, as a crash would (the recovery tests).
     fn terminate(&self);
+    /// Forget the signed-in session: the page's cookies and storage.
+    fn sign_out(&self, done: Box<dyn FnOnce()>);
 }

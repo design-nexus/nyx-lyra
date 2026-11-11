@@ -117,6 +117,10 @@ fn build() -> Rc<Mini> {
 pub fn toggle() {
     let mini = MINI.with(|m| m.borrow_mut().get_or_insert_with(build).clone());
     let Some(ui) = ui() else { return };
+    // The sign-in sheet needs the window: hiding it would leave Google's page unseen.
+    if ui.signing_in() && !mini.window.is_visible() {
+        return;
+    }
     if mini.window.is_visible() {
         mini.window.set_visible(false);
         ui.window.present();

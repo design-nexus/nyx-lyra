@@ -44,13 +44,18 @@ here at once and is replaced by YouTube Music's answer. Covers in `~/.cache/nyx-
   Up next, Lyrics, Related.
 - **Mini-player** (the strip): 380 × 96, cover, song, three controls, Open Lyra, a progress
   line; opening it hides the main window, and the music keeps playing.
-- **Sign in:** while the page reports no signed-in session, the window shows the sign-in
-  card with Google's own page (where YouTube Music's Sign in button leads) and goes back to
-  the pages when it's done.
+- **Sign in:** while the page reports no signed-in session, Google's own page (where YouTube
+  Music's Sign in button leads) fills the window under Lyra's strip: where the page is from,
+  the account, Use another account, Not now. The email comes from the Google account in Nyx
+  Online Accounts (its account list only; Lyra never asks it for a token): YouTube Music's
+  web player signs in only with Google's web session, which no OAuth token can stand in
+  for. Every key goes to Google's page while it shows. Not now browses signed out (Home,
+  Explore and search work; the library asks to sign in) with Sign in in the header;
+  Settings → Playback signs in or out (sign-out clears Lyra's web session and cached pages).
 - **Settings** (the shared card): Playback (keep playing when the window closes, the
   column), then Appearance, Keyboard and About.
 - **Keys:** Space, Ctrl+←/→, Ctrl+F, Alt+←/→, F, Ctrl+M, Ctrl+B, Esc, Ctrl+, (the list in
-  Keyboard).
+  Keyboard). Single keys and Ctrl+←/→ act only when no field or the page has the keyboard.
 
 Shuffle, repeat and like aren't shown: YouTube Music's Media Session doesn't offer them,
 and Lyra shows no control it can't make work.

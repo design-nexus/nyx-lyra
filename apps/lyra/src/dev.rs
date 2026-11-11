@@ -92,6 +92,28 @@ fn handle(player: &Rc<Player>, app: &gtk::Application, line: &str, start: Instan
         "now" => return crate::ui::open_now(&s("tab")),
         "close-now" => return crate::ui::close_now(),
         "mini" => return crate::ui::mini::toggle(),
+        "signin" => return crate::ui::dev_signin(),
+        "not-now" => return crate::ui::dev_decline(),
+        "settings" => return crate::ui::dev_settings(),
+        "sign-out" => return player.sign_out(),
+        "accounts" => {
+            return crate::accounts::google_email(move |email| {
+                out(
+                    json!({ "event": "accounts", "google": email.is_some(), "domain": email.as_deref().and_then(|e| e.split('@').nth(1)) }),
+                    start,
+                )
+            });
+        }
+        "ui" => return out(json!({ "event": "ui", "ui": crate::ui::describe() }), start),
+        "focus-web" => return out(json!({ "event": "focus-web", "focused": crate::ui::dev_focus_web() }), start),
+        // A key as if pressed: the same path as the window's key handler.
+        "key" => {
+            let Some(key) = gtk::gdk::Key::from_name(s("key")) else {
+                return out(json!({ "event": "key", "error": "unknown key" }), start);
+            };
+            let handled = crate::ui::on_key(key, gtk::gdk::ModifierType::empty()) == gtk::glib::Propagation::Stop;
+            return out(json!({ "event": "key", "handled": handled, "ui": crate::ui::describe() }), start);
+        }
         // Map the window the tests built hidden (tools/headless.sh checks the rules first).
         "show" => {
             if let Some(w) = app.windows().first() {

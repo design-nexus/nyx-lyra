@@ -46,8 +46,14 @@ pub struct Player {
     /// The song Lyra was asked to play (or a recovery brought back), until it plays: if the
     /// page skips it (its stream kept failing), Lyra loads it once more.
     recovering: RefCell<Option<(String, bool)>>,
-    /// Requests made while the page was still loading, sent once it's ready.
+    /// Requests made while the page was loading, with when they were first asked: sent once
+    /// the new page's bridge reports.
     pending: RefCell<Vec<(Request, Reply, Instant)>>,
+    /// Counts the pages Lyra loads: a request cut off by a newer page is asked again there.
+    page: Cell<u64>,
+    /// Lyra loaded a page whose bridge hasn't reported yet (`hello` once it started).
+    loading: Cell<bool>,
+    hello: Cell<bool>,
 }
 
 /// In WebKitGTK 2.54, the first song a new web process plays often fails: the audio branch
@@ -72,11 +78,14 @@ impl Player {
             seek_after_play: Cell::new(None),
             recovering: RefCell::default(),
             pending: RefCell::default(),
+            page: Cell::new(0),
+            loading: Cell::new(false),
+            hello: Cell::new(false),
         })
     }
 
     pub fn attach(self: &Rc<Self>, rt: Rc<dyn Runtime>) {
-        rt.load(Load::Home);
+        self.load_page(&rt, Load::Home);
         *self.runtime.borrow_mut() = Some(rt);
         let me = Rc::downgrade(self);
         glib::timeout_add_local(Duration::from_millis(250), move || {
@@ -90,6 +99,14 @@ impl Player {
 
     fn runtime(&self) -> Option<Rc<dyn Runtime>> {
         self.runtime.borrow().clone()
+    }
+
+    /// Every page Lyra loads goes through here, so requests wait for it.
+    fn load_page(&self, rt: &Rc<dyn Runtime>, target: Load) {
+        self.page.set(self.page.get() + 1);
+        self.loading.set(true);
+        self.hello.set(false);
+        rt.load(target);
     }
 
     pub fn connect(&self, f: impl Fn(&Event) + 'static) {
@@ -201,7 +218,7 @@ impl Player {
         match self.runtime() {
             Some(rt) => {
                 self.want_play.set(true);
-                rt.load(target);
+                self.load_page(&rt, target);
                 true
             }
             None => false,
@@ -224,7 +241,7 @@ impl Player {
                 *self.recovering.borrow_mut() = Some((video_id.clone(), true));
                 *self.replays.borrow_mut() = (None, 0);
                 if let Some(rt) = self.runtime() {
-                    rt.load(Load::Watch { video_id, playlist_id: None, at: None });
+                    self.load_page(&rt, Load::Watch { video_id, playlist_id: None, at: None });
                 }
                 return;
             }
@@ -271,21 +288,57 @@ impl Player {
         });
     }
 
-    pub fn request(&self, request: &Request, reply: Reply) {
-        match (self.runtime(), self.state().connection) {
-            (Some(rt), Connection::Ready) => rt.request(request, reply),
-            (Some(_), Connection::Starting | Connection::Reconnecting) => {
-                self.pending.borrow_mut().push((request.clone(), reply, Instant::now()))
+    pub fn request(self: &Rc<Self>, request: &Request, reply: Reply) {
+        self.request_from(request.clone(), reply, Instant::now());
+    }
+
+    fn request_from(self: &Rc<Self>, request: Request, reply: Reply, asked: Instant) {
+        let connection = self.state().connection;
+        let Some(rt) = self.runtime() else { return reply(Err(runtime::RequestError::NotReady)) };
+        match connection {
+            Connection::Ready if !self.loading.get() => {
+                let page = self.page.get();
+                let me = Rc::downgrade(self);
+                let again = request.clone();
+                rt.request(
+                    &request,
+                    Box::new(move |r| {
+                        // Cut off by a page Lyra loaded since, or asked before the page could
+                        // answer: ask again once it can, within the wait.
+                        let retry = matches!(r, Err(runtime::RequestError::NotReady | runtime::RequestError::Failed(_)));
+                        match me.upgrade() {
+                            Some(p) if retry && asked.elapsed() < REQUEST_WAIT => {
+                                let moved = p.page.get() != page || p.loading.get();
+                                if !moved && !matches!(r, Err(runtime::RequestError::NotReady)) {
+                                    return reply(r);
+                                }
+                                p.pending.borrow_mut().push((again, reply, asked));
+                                let me = Rc::downgrade(&p);
+                                glib::timeout_add_local_once(Duration::from_millis(300), move || {
+                                    if let Some(p) = me.upgrade() {
+                                        p.send_pending();
+                                    }
+                                });
+                            }
+                            _ => reply(r),
+                        }
+                    }),
+                );
             }
-            _ => reply(Err(runtime::RequestError::NotReady)),
+            Connection::Ready | Connection::Starting | Connection::Reconnecting => {
+                self.pending.borrow_mut().push((request, reply, asked))
+            }
+            Connection::Lost => reply(Err(runtime::RequestError::NotReady)),
         }
     }
 
-    fn send_pending(&self) {
-        let Some(rt) = self.runtime() else { return };
+    fn send_pending(self: &Rc<Self>) {
+        if self.loading.get() || self.state().connection != Connection::Ready {
+            return;
+        }
         let pending = std::mem::take(&mut *self.pending.borrow_mut());
-        for (request, reply, _) in pending {
-            rt.request(&request, reply);
+        for (request, reply, asked) in pending {
+            self.request_from(request, reply, asked);
         }
     }
 
@@ -303,11 +356,29 @@ impl Player {
         }
     }
 
-    /// Show Google's sign-in page in the page (the sign-in card holds it).
-    pub fn sign_in(&self) {
+    /// Show Google's sign-in page in the page (the sign-in sheet holds it).
+    pub fn sign_in(&self, email: Option<String>) {
         if let Some(rt) = self.runtime() {
-            rt.load(Load::SignIn);
+            self.load_page(&rt, Load::SignIn { email });
         }
+    }
+
+    /// YouTube Music's Home in the page (after leaving Google's sign-in page).
+    pub fn home(&self) {
+        if let Some(rt) = self.runtime() {
+            self.load_page(&rt, Load::Home);
+        }
+    }
+
+    /// Forget YouTube Music's session, then load Home (signed out, it asks to sign in).
+    pub fn sign_out(self: &Rc<Self>) {
+        let Some(rt) = self.runtime() else { return };
+        let me = Rc::downgrade(self);
+        rt.sign_out(Box::new(move || {
+            if let Some(p) = me.upgrade() {
+                p.home();
+            }
+        }));
     }
 
     pub fn terminate(&self) {
@@ -326,7 +397,10 @@ impl Player {
     pub fn on_runtime(self: &Rc<Self>, e: runtime::Event) {
         match e {
             // A new page: its first song gets its own retries.
-            runtime::Event::Hello => *self.replays.borrow_mut() = (None, 0),
+            runtime::Event::Hello => {
+                *self.replays.borrow_mut() = (None, 0);
+                self.hello.set(true);
+            }
             runtime::Event::State(s) => {
                 let mut events = Vec::new();
                 if self.state().connection != Connection::Ready {
@@ -341,6 +415,9 @@ impl Player {
                     *self.last.borrow_mut() = Some(Resume { video_id: v.clone(), at: pos as u32, playing: now.is_playing() });
                 }
                 self.emit(events);
+                if self.loading.get() && self.hello.get() {
+                    self.loading.set(false);
+                }
                 self.send_pending();
                 self.finish_resume(&now);
                 self.replay_if_failed(&now);
@@ -386,8 +463,8 @@ impl Player {
             let Some(rt) = p.runtime() else { return };
             match p.resume.borrow().clone() {
                 // From the start: a page that starts mid-song fails to play here (see REPLAY_DELAYS_MS).
-                Some(r) => rt.load(Load::Watch { video_id: r.video_id, playlist_id: None, at: None }),
-                None => rt.load(Load::Home),
+                Some(r) => p.load_page(&rt, Load::Watch { video_id: r.video_id, playlist_id: None, at: None }),
+                None => p.load_page(&rt, Load::Home),
             }
         });
     }

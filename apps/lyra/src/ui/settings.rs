@@ -6,8 +6,7 @@ use gtk::prelude::*;
 use nyx_ui::settings_card::{self, About, Spec, Standard};
 use nyx_ui::widgets;
 
-const GROUPS: &[(&str, &str, &str)] =
-    &[("Playback", "media-playback-start-symbolic", "Keep playing, the column, the mini-player")];
+const GROUPS: &[(&str, &str, &str)] = &[("Playback", "media-playback-start-symbolic", "Account, keep playing, the column")];
 
 const SPEC: Spec = Spec {
     groups: GROUPS,
@@ -43,6 +42,7 @@ pub fn open() {
         group.append(&heading);
         let list = gtk::Box::new(gtk::Orientation::Vertical, 0);
         list.add_css_class("group-list");
+        list.append(&account_row());
         let p = prefs::get();
         list.append(
             &widgets::switch_row(
@@ -71,4 +71,36 @@ pub fn open() {
         body.append(&group);
         (body.clone().upcast(), body)
     });
+}
+
+/// Signed in: Sign out (Lyra's session only). Signed out: Sign in.
+fn account_row() -> gtk::Box {
+    let signed_in = ui().is_some_and(|u| u.signed_in.get() == Some(true));
+    if signed_in {
+        let out = widgets::two_click("Sign out", "Click again to sign out", || {
+            settings_card::close();
+            crate::cache::clear();
+            if let Some(p) = crate::player() {
+                p.sign_out();
+            }
+        });
+        widgets::row(
+            "YouTube Music account",
+            "Signed in. Signing out forgets the session in Lyra; your Google account and Online Accounts stay as they are.",
+            Some(out.upcast_ref()),
+        )
+    } else {
+        widgets::button_row(
+            "YouTube Music account",
+            "Signed out. YouTube Music plays only signed in; you sign in on Google's own page.",
+            "Sign in",
+            |_| {
+                settings_card::close();
+                if let Some(ui) = ui() {
+                    ui.show_signin(true, None);
+                }
+            },
+        )
+        .0
+    }
 }

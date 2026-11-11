@@ -22,8 +22,9 @@ after 10 s with nothing to do).
 | `lyra.open` | `open [page]` | Shows the window at Home, Explore, Search, Library, Liked Music or Now playing |
 
 The controls and volume answer only after the page confirms them (the state it reports
-changes), or with why not; `play` answers once Lyra has the song loading. Requests made while the page is still
-loading wait for it (up to 30 s), so a cold `nyx lyra search` answers once YouTube Music
+changes), or with why not; `play` answers once Lyra has the song loading. Requests made
+while a page Lyra loaded is still loading wait for its bridge (up to 30 s), and one cut
+off by a newer page is asked again, so a cold `nyx lyra search` answers once YouTube Music
 is up. Playback needs the window: `play` opens it.
 
 Commands that change something are taken only from Nyx programs (the `nyx` command,

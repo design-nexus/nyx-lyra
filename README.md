@@ -18,7 +18,8 @@ the Assistant through its actions.
 
 Installs `nyx-lyra` and Lyra in the app launcher, with WebKitGTK 6.0 and the GStreamer
 plugins it needs (good, bad, libav). `./uninstall.sh` removes it. Sign in to YouTube Music in
-the window the first time; YouTube Music doesn't play anything signed out.
+the window the first time, on Google's own page (the email comes from Online Accounts);
+YouTube Music doesn't play anything signed out.
 
 ## What's here
 

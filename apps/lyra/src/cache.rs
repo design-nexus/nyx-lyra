@@ -3,7 +3,7 @@
 //! newest `KEEP` pages are kept.
 
 use nyx_lyra_core::model::Page;
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
 use std::cell::RefCell;
 
 const KEEP: i64 = 300;
@@ -35,7 +35,7 @@ fn now() -> i64 {
 }
 
 pub fn get(key: &str) -> Option<Page> {
-    let json: String = with(|c| c.query_row("SELECT json FROM pages WHERE key = ?1", params![key], |r| r.get(0)))?;
+    let json: String = with(|c| c.query_row("SELECT json FROM pages WHERE key = ?1", params![key], |r| r.get(0)).optional())??;
     serde_json::from_str(&json).ok()
 }
 
@@ -45,4 +45,9 @@ pub fn put(key: &str, page: &Page) {
         c.execute("INSERT OR REPLACE INTO pages (key, json, at) VALUES (?1, ?2, ?3)", params![key, json, now()])?;
         c.execute("DELETE FROM pages WHERE key NOT IN (SELECT key FROM pages ORDER BY at DESC LIMIT ?1)", params![KEEP])
     });
+}
+
+/// Forget every page (signing out: they're the account's library and recommendations).
+pub fn clear() {
+    with(|c| c.execute("DELETE FROM pages", []));
 }

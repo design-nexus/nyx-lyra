@@ -1,7 +1,7 @@
 //! The window (direction A of nyx-design's `mockups/lyra`): header, sidebar, the
 //! now-playing column, the pages, and the player bar; the expanded player and sign-in
 //! replace the body when they show. YouTube Music's page lives beneath the native window,
-//! covered by it, and in the sign-in card while signing in.
+//! covered by it, and fills the sign-in sheet while signing in.
 
 mod column;
 mod expanded;
@@ -86,7 +86,11 @@ pub struct Ui {
     now: Rc<expanded::Expanded>,
     web: gtk::Widget,
     web_hidden: gtk::Box,
-    web_card: gtk::Box,
+    signin: Signin,
+    /// "Sign in" in the header, after "Not now".
+    signin_button: gtk::Button,
+    /// "Not now" was chosen: the sheet waits for the header's Sign in.
+    declined: Cell<bool>,
     history: RefCell<Vec<Route>>,
     ahead: RefCell<Vec<Route>>,
     /// The queue for the song playing (YouTube Music's own, from its Up next).
@@ -121,6 +125,15 @@ pub fn build(app: &gtk::Application, web: &gtk::Widget) -> gtk::ApplicationWindo
     let search = gtk::SearchEntry::builder().placeholder_text("Search YouTube Music").width_request(340).build();
     search.add_css_class("header-search");
     header.center.append(&search);
+    let signin_button = gtk::Button::with_label("Sign in");
+    signin_button.add_css_class("suggested-action");
+    signin_button.set_visible(false);
+    signin_button.connect_clicked(|_| {
+        if let Some(ui) = ui() {
+            ui.show_signin(true, None);
+        }
+    });
+    header.end.append(&signin_button);
     let mini_button = widgets::bar_button("view-restore-symbolic", "Mini-player (Ctrl+M)");
     mini_button.connect_clicked(|_| mini::toggle());
     header.end.append(&mini_button);
@@ -145,13 +158,13 @@ pub fn build(app: &gtk::Application, web: &gtk::Widget) -> gtk::ApplicationWindo
     main.append(&bar.root);
 
     let now = expanded::Expanded::new();
-    let (signin, web_card) = signin_page();
+    let signin = Signin::new();
     let top = gtk::Stack::new();
     top.set_transition_type(gtk::StackTransitionType::Crossfade);
     top.set_transition_duration(if prefs::get().reduce_motion { 0 } else { 160 });
     top.add_named(&main, Some("main"));
     top.add_named(&now.root, Some("now"));
-    top.add_named(&signin, Some("signin"));
+    top.add_named(&signin.root, Some("signin"));
 
     let frame = gtk::Box::new(gtk::Orientation::Vertical, 0);
     frame.add_css_class("window-frame");
@@ -185,7 +198,9 @@ pub fn build(app: &gtk::Application, web: &gtk::Widget) -> gtk::ApplicationWindo
         now,
         web: web.clone(),
         web_hidden,
-        web_card,
+        signin,
+        signin_button,
+        declined: Cell::new(false),
         history: RefCell::default(),
         ahead: RefCell::default(),
         next: RefCell::default(),
@@ -272,9 +287,16 @@ impl Ui {
         self.connection.set(s.connection);
         if s.connection == Connection::Ready {
             match s.signed_in {
-                Some(false) if self.signed_in.get() != Some(false) => self.show_signin(true),
+                Some(false) if self.signed_in.get() != Some(false) => {
+                    if self.signed_in.get() == Some(true) {
+                        self.side.reload();
+                    }
+                    if !self.declined.get() {
+                        self.show_signin(true, None)
+                    }
+                }
                 Some(true) if self.signed_in.get() == Some(false) => {
-                    self.show_signin(false);
+                    self.show_signin(false, None);
                     self.side.reload();
                     refresh();
                 }
@@ -283,6 +305,7 @@ impl Ui {
             if s.signed_in.is_some() {
                 self.signed_in.set(s.signed_in);
             }
+            self.signin_button.set_visible(s.signed_in == Some(false) && !self.signing_in());
         }
         // A new song: fetch its queue (YouTube Music's own Up next).
         let video = s.track.as_ref().and_then(|t| t.video_id.clone());
@@ -310,71 +333,128 @@ impl Ui {
         }
     }
 
-    /// Signing in shows YouTube Music's page in the sign-in card; otherwise it's back
-    /// beneath the native window.
-    fn show_signin(&self, on: bool) {
+    pub fn signing_in(&self) -> bool {
+        self.top.visible_child_name().as_deref() == Some("signin")
+    }
+
+    /// Signing in shows Google's page in the sheet, filling the window under Lyra's strip;
+    /// otherwise the page is back beneath the native window. `account` is `Some(None)` for
+    /// "Use another account" (no email filled in); `None` asks Online Accounts.
+    pub fn show_signin(self: &Rc<Self>, on: bool, account: Option<Option<String>>) {
         let web = &self.web;
         if let Some(parent) = web.parent().and_downcast::<gtk::Box>() {
             parent.remove(web);
         }
+        web.set_size_request(-1, -1);
+        web.set_hexpand(true);
+        web.set_vexpand(true);
         if on {
-            web.set_size_request(440, 560);
-            web.set_hexpand(false);
-            web.set_vexpand(false);
-            self.web_card.append(web);
-            if let Some(p) = player() {
-                p.sign_in();
+            self.declined.set(false);
+            self.signin.slot.append(web);
+            self.signin.set_account(None);
+            let load = |email: Option<String>| {
+                if let Some(ui) = ui() {
+                    ui.signin.set_account(email.as_deref());
+                }
+                if let Some(p) = player() {
+                    p.sign_in(email);
+                }
+            };
+            // The checks use a made-up address: Google may prompt a real account's phone.
+            let test_email = std::env::var("NYX_LYRA_TEST_EMAIL").ok().filter(|_| crate::dev::enabled());
+            match (account, test_email) {
+                (Some(email), _) => load(email),
+                (None, Some(email)) => load(Some(email)),
+                (None, None) => crate::accounts::google_email(load),
             }
         } else {
-            web.set_size_request(-1, -1);
-            web.set_hexpand(true);
-            web.set_vexpand(true);
             self.web_hidden.append(web);
         }
         self.top.set_visible_child_name(if on { "signin" } else { "main" });
-        self.header.set_subtitle(if on { "Sign in" } else { "" });
+        let route = self.history.borrow().last().cloned();
+        self.header.set_subtitle(&if on { "Sign in".into() } else { route.map(|r| r.title()).unwrap_or_default() });
+        self.search.set_sensitive(!on);
+        self.signin_button.set_visible(!on && self.signed_in.get() == Some(false));
+        if on {
+            web.grab_focus();
+        }
+    }
+
+    /// "Not now": browse signed out; the header's Sign in brings the sheet back.
+    fn decline_signin(self: &Rc<Self>) {
+        self.declined.set(true);
+        self.show_signin(false, None);
+        if let Some(p) = player() {
+            p.home();
+        }
+        // Pages asked for while Google's page was up failed or wait for Home: ask again.
+        refresh();
     }
 }
 
-fn signin_page() -> (gtk::Box, gtk::Box) {
-    let page = gtk::Box::new(gtk::Orientation::Horizontal, 56);
-    page.add_css_class("signin");
-    page.set_halign(gtk::Align::Center);
-    page.set_valign(gtk::Align::Center);
-    let copy = gtk::Box::new(gtk::Orientation::Vertical, 10);
-    copy.set_width_request(360);
-    copy.set_valign(gtk::Align::Center);
-    let icon = gtk::Image::from_icon_name("io.github.design_nexus.nyx.Lyra-symbolic");
-    icon.set_pixel_size(56);
-    icon.set_halign(gtk::Align::Start);
-    icon.add_css_class("signin-icon");
-    copy.append(&icon);
-    let title = widgets::label("Sign in to YouTube Music", "signin-title");
-    title.set_xalign(0.0);
-    copy.append(&title);
-    for text in [
-        "Lyra plays music through YouTube Music's own web player, so you sign in on Google's page, shown here. Your password goes to Google, never to Lyra.",
-        "YouTube Music doesn't play anything signed out.",
-    ] {
-        let l = widgets::label(text, "dim-label");
-        l.set_wrap(true);
-        l.set_xalign(0.0);
-        l.set_max_width_chars(42);
-        copy.append(&l);
+/// The sign-in sheet: Lyra's strip (where the page is from, whose account, Use another
+/// account, Not now) above Google's page.
+struct Signin {
+    root: gtk::Box,
+    slot: gtk::Box,
+    title: gtk::Label,
+    other: gtk::Button,
+}
+
+impl Signin {
+    fn new() -> Self {
+        let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        root.add_css_class("signin-sheet");
+        let strip = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+        strip.add_css_class("signin-strip");
+        let lock = gtk::Image::from_icon_name("channel-secure-symbolic");
+        lock.add_css_class("signin-lock");
+        strip.append(&lock);
+        let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
+        text.set_hexpand(true);
+        text.set_valign(gtk::Align::Center);
+        let title = widgets::label("Sign in to YouTube Music", "signin-title");
+        title.set_xalign(0.0);
+        title.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        text.append(&title);
+        let note =
+            widgets::label("accounts.google.com · Google's own page: your password goes to Google, never to Lyra", "dim-label");
+        note.set_xalign(0.0);
+        note.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        text.append(&note);
+        strip.append(&text);
+        let other = gtk::Button::with_label("Use another account");
+        other.add_css_class("flat");
+        other.set_visible(false);
+        other.connect_clicked(|_| {
+            if let Some(ui) = ui() {
+                ui.show_signin(true, Some(None));
+            }
+        });
+        strip.append(&other);
+        let later = gtk::Button::with_label("Not now");
+        later.connect_clicked(|_| {
+            if let Some(ui) = ui() {
+                ui.decline_signin();
+            }
+        });
+        strip.append(&later);
+        root.append(&strip);
+        let slot = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        slot.set_hexpand(true);
+        slot.set_vexpand(true);
+        slot.set_overflow(gtk::Overflow::Hidden);
+        root.append(&slot);
+        Self { root, slot, title, other }
     }
-    let card = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    card.add_css_class("web-card");
-    card.set_size_request(440, -1);
-    card.set_overflow(gtk::Overflow::Hidden);
-    card.set_valign(gtk::Align::Center);
-    let origin = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-    origin.add_css_class("web-origin");
-    origin.append(&gtk::Image::from_icon_name("channel-secure-symbolic"));
-    origin.append(&widgets::label("accounts.google.com · Google's sign-in page", "dim-label"));
-    card.append(&origin);
-    page.append(&copy);
-    page.append(&card);
-    (page, card)
+
+    fn set_account(&self, email: Option<&str>) {
+        match email {
+            Some(e) => self.title.set_text(&format!("Sign in to YouTube Music as {e}")),
+            None => self.title.set_text("Sign in to YouTube Music"),
+        }
+        self.other.set_visible(email.is_some());
+    }
 }
 
 /* ── Navigation ────────────────────────────────────────────────────────────────── */
@@ -423,7 +503,7 @@ pub fn refresh() {
 
 fn show(ui: &Rc<Ui>, route: &Route) {
     // Signing in stays in front until it's done.
-    if ui.top.visible_child_name().as_deref() != Some("signin") {
+    if !ui.signing_in() {
         ui.top.set_visible_child_name("main");
     }
     let page = pages::open(route);
@@ -438,7 +518,7 @@ fn show(ui: &Rc<Ui>, route: &Route) {
             ui.pages.remove(&c);
         }
     }
-    if ui.top.visible_child_name().as_deref() != Some("signin") {
+    if !ui.signing_in() {
         ui.header.set_subtitle(&route.title());
     }
     chrome::set_title(&ui.window, "Lyra", &route.title());
@@ -474,6 +554,9 @@ pub fn play(item: &Item) {
 
 pub fn open_now(tab: &str) {
     let Some(ui) = ui() else { return };
+    if ui.signing_in() {
+        return;
+    }
     ui.now.set_tab(tab);
     ui.top.set_visible_child_name("now");
     ui.header.set_subtitle("Now playing");
@@ -481,6 +564,9 @@ pub fn open_now(tab: &str) {
 
 pub fn close_now() {
     let Some(ui) = ui() else { return };
+    if ui.signing_in() {
+        return;
+    }
     ui.top.set_visible_child_name("main");
     let route = ui.history.borrow().last().cloned();
     ui.header.set_subtitle(&route.map(|r| r.title()).unwrap_or_default());
@@ -497,46 +583,113 @@ fn remember_search(q: &str) {
 fn install_keys(window: &gtk::ApplicationWindow) {
     let keys = gtk::EventControllerKey::new();
     keys.set_propagation_phase(gtk::PropagationPhase::Capture);
-    keys.connect_key_pressed(|_, key, _, mods| {
-        let ctrl = mods.contains(gdk::ModifierType::CONTROL_MASK);
-        let alt = mods.contains(gdk::ModifierType::ALT_MASK);
-        let typing = ui().is_some_and(|u| {
-            u.search.has_focus() || gtk::prelude::GtkWindowExt::focus(&u.window).is_some_and(|f| f.is::<gtk::Text>())
-        });
-        let send = |c: Command| {
-            if let Some(p) = player() {
-                p.send(c);
-            }
-        };
-        match key {
-            gdk::Key::space if !typing => send(Command::Toggle),
-            gdk::Key::Right if ctrl => send(Command::Next),
-            gdk::Key::Left if ctrl => send(Command::Previous),
-            gdk::Key::Left if alt => go_back(),
-            gdk::Key::Right if alt => go_forward(),
-            gdk::Key::f | gdk::Key::F if ctrl => {
-                if let Some(u) = ui() {
-                    u.search.grab_focus();
-                }
-            }
-            gdk::Key::f if !typing && !ctrl => open_now("queue"),
-            gdk::Key::m if ctrl => mini::toggle(),
-            gdk::Key::b if ctrl => {
-                if let Some(u) = ui() {
-                    u.side.side.toggle();
-                    prefs::update(|p| p.sidebar_collapsed = u.side.side.is_collapsed());
-                }
-            }
-            gdk::Key::Escape if ui().is_some_and(|u| u.top.visible_child_name().as_deref() == Some("now")) => close_now(),
-            _ => return glib::Propagation::Proceed,
-        }
-        glib::Propagation::Stop
-    });
+    keys.connect_key_pressed(|_, key, _, mods| on_key(key, mods));
     window.add_controller(keys);
+}
+
+/// Lyra's shortcuts; anything else (and everything while signing in) goes on to the focus.
+pub fn on_key(key: gdk::Key, mods: gdk::ModifierType) -> glib::Propagation {
+    let ctrl = mods.contains(gdk::ModifierType::CONTROL_MASK);
+    let alt = mods.contains(gdk::ModifierType::ALT_MASK);
+    let Some(u) = ui() else { return glib::Propagation::Proceed };
+    let focus = gtk::prelude::GtkWindowExt::focus(&u.window);
+    // The web page takes typing (Google's sign-in fields, YouTube Music's own).
+    let typing = u.search.has_focus() || focus.is_some_and(|f| f.is::<gtk::Text>() || f == u.web || f.is_ancestor(&u.web));
+    if !shortcuts_allowed(u.signing_in(), typing, ctrl || alt) {
+        return glib::Propagation::Proceed;
+    }
+    let send = |c: Command| {
+        if let Some(p) = player() {
+            p.send(c);
+        }
+    };
+    match key {
+        gdk::Key::space if !typing => send(Command::Toggle),
+        // In a field, Ctrl+←/→ moves by word.
+        gdk::Key::Right if ctrl && !typing => send(Command::Next),
+        gdk::Key::Left if ctrl && !typing => send(Command::Previous),
+        gdk::Key::Left if alt => go_back(),
+        gdk::Key::Right if alt => go_forward(),
+        gdk::Key::f | gdk::Key::F if ctrl => {
+            if let Some(u) = ui() {
+                u.search.grab_focus();
+            }
+        }
+        gdk::Key::f if !typing && !ctrl => open_now("queue"),
+        gdk::Key::m if ctrl => mini::toggle(),
+        gdk::Key::b if ctrl => {
+            if let Some(u) = ui() {
+                u.side.side.toggle();
+                prefs::update(|p| p.sidebar_collapsed = u.side.side.is_collapsed());
+            }
+        }
+        gdk::Key::Escape if !typing && u.top.visible_child_name().as_deref() == Some("now") => close_now(),
+        _ => return glib::Propagation::Proceed,
+    }
+    glib::Propagation::Stop
+}
+
+/// For the checks: what's showing and where the keyboard is.
+pub fn describe() -> serde_json::Value {
+    let Some(u) = ui() else { return serde_json::Value::Null };
+    let focus = gtk::prelude::GtkWindowExt::focus(&u.window);
+    serde_json::json!({
+        "view": u.top.visible_child_name().map(|n| n.to_string()),
+        "subtitle": u.header.subtitle.text().to_string(),
+        "signin_title": u.signin.title.text().to_string(),
+        "focus_in_web": focus.is_some_and(|f| f == u.web || f.is_ancestor(&u.web)),
+        "signin_button": u.signin_button.is_visible(),
+    })
+}
+
+/// For the checks: open the sign-in sheet, or put the keyboard in the page.
+pub fn dev_signin() {
+    if let Some(u) = ui() {
+        u.show_signin(true, None);
+    }
+}
+
+pub fn dev_settings() {
+    settings::open();
+}
+
+pub fn dev_decline() {
+    if let Some(u) = ui() {
+        u.decline_signin();
+    }
+}
+
+pub fn dev_focus_web() -> bool {
+    ui().is_some_and(|u| u.web.grab_focus())
+}
+
+/// Whether a key may act as one of Lyra's shortcuts: none while signing in (every key
+/// belongs to Google's page), and single keys only when nothing takes typing.
+fn shortcuts_allowed(signing_in: bool, typing: bool, modifier: bool) -> bool {
+    !signing_in && (modifier || !typing)
 }
 
 /// "3:05" from seconds.
 pub fn clock(secs: f64) -> String {
     let s = secs.max(0.0) as u64;
     if s >= 3600 { format!("{}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60) } else { format!("{}:{:02}", s / 60, s % 60) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::shortcuts_allowed;
+
+    #[test]
+    fn shortcuts_leave_typing_alone() {
+        // Signing in: nothing, not even Ctrl shortcuts.
+        assert!(!shortcuts_allowed(true, true, false));
+        assert!(!shortcuts_allowed(true, false, false));
+        assert!(!shortcuts_allowed(true, true, true));
+        // Typing in the page or a field: only Ctrl and Alt shortcuts.
+        assert!(!shortcuts_allowed(false, true, false));
+        assert!(shortcuts_allowed(false, true, true));
+        // Nothing takes typing: every shortcut.
+        assert!(shortcuts_allowed(false, false, false));
+        assert!(shortcuts_allowed(false, false, true));
+    }
 }

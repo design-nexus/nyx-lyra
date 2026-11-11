@@ -64,11 +64,29 @@ pub fn open(route: &Route) -> gtk::Widget {
     };
     let route = route.clone();
     let had = cached.is_some();
-    fetch(&req, move |r| match r {
+    // Signed out, YouTube Music still has Home, Explore and search; the library needs an account.
+    let needs_account = matches!(route, Route::Library(_) | Route::Liked);
+    fetch(&req, needs_account, move |r| match r {
         Ok(page) => {
             cache::put(&key, &page);
             clear(&content);
             render(&content, &page, &route);
+        }
+        Err(why) if why == SIGNED_OUT => {
+            clear(&content);
+            content.append(&widgets::empty_state(
+                "system-users-symbolic",
+                "Sign in to see your library",
+                "Your playlists, albums, artists and liked songs come from your YouTube Music account.",
+                Some((
+                    "Sign in",
+                    Box::new(|| {
+                        if let Some(ui) = crate::ui::ui() {
+                            ui.show_signin(true, None);
+                        }
+                    }),
+                )),
+            ));
         }
         Err(why) if !had => {
             clear(&content);
@@ -86,14 +104,17 @@ pub fn open(route: &Route) -> gtk::Widget {
     scroll.upcast()
 }
 
+const SIGNED_OUT: &str = "Sign in to YouTube Music to see this";
+
 /// A request, read into a page.
-fn fetch(req: &Request, done: impl FnOnce(Result<Page, String>) + 'static) {
+fn fetch(req: &Request, needs_account: bool, done: impl FnOnce(Result<Page, String>) + 'static) {
     let Some(p) = player() else { return done(Err("Lyra isn't ready".into())) };
     p.request(
         req,
         Box::new(move |r| {
             done(match r {
-                Ok(v) if youtube::logged_in(&v) == Some(false) => Err("Sign in to YouTube Music to see this".into()),
+                Ok(v) if needs_account && youtube::logged_in(&v) == Some(false) => Err(SIGNED_OUT.into()),
+                Err(crate::runtime::RequestError::SignedOut) => Err(SIGNED_OUT.into()),
                 Ok(v) => youtube::page(&v).map_err(|e| e.to_string()),
                 Err(e) => Err(e.to_string()),
             })
@@ -177,7 +198,7 @@ fn load_more(b: &gtk::Box, token: String, detail: bool) -> gtk::Widget {
         btn.set_label("Loading…");
         let Some(req) = youtube::more(&token) else { return };
         let (body, btn) = (body.clone(), btn.clone());
-        fetch(&req, move |r| {
+        fetch(&req, false, move |r| {
             body.remove(&btn);
             match r {
                 Ok(p) => {
