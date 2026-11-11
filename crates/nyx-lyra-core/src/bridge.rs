@@ -32,6 +32,10 @@ pub struct State {
     /// The Media Session actions the page handles ("play", "nexttrack", …).
     pub actions: Vec<String>,
     pub path: Option<String>,
+    /// The watch page's song (`?v=`), which the web client keeps in the address.
+    pub video: Option<String>,
+    /// Whether the page has a signed-in session (only the answer leaves the page).
+    pub signed: Option<bool>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -72,6 +76,7 @@ fn clean(s: &mut State) {
         *t = t.take().map(|x| text(&x)).filter(|x| !x.is_empty());
     }
     s.artwork = s.artwork.take().filter(|u| u.len() <= 2048 && u.starts_with("https://"));
+    s.video = s.video.take().filter(|v| (1..=64).contains(&v.len()) && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'));
     for n in [&mut s.position, &mut s.duration] {
         *n = n.filter(|x| x.is_finite() && *x >= 0.0);
     }
@@ -88,7 +93,7 @@ mod tests {
     fn state_is_cleaned() {
         let long = "x".repeat(2000);
         let raw = format!(
-            r#"{{"kind":"state","title":"{long}","artist":"","artwork":"javascript:alert(1)","position":-3,"duration":243.2,"volume":7,"paused":false,"media":true,"actions":["play","nexttrack"]}}"#
+            r#"{{"kind":"state","title":"{long}","artist":"","artwork":"javascript:alert(1)","position":-3,"duration":243.2,"volume":7,"paused":false,"media":true,"actions":["play","nexttrack"],"video":"../x"}}"#
         );
         let Ok(Message::State(s)) = parse(&raw) else { panic!() };
         assert_eq!(s.title.unwrap().len(), MAX_TEXT);
@@ -98,6 +103,7 @@ mod tests {
         assert_eq!(s.duration, Some(243.2));
         assert_eq!(s.volume, Some(1.0));
         assert_eq!(s.actions, ["play", "nexttrack"]);
+        assert_eq!(s.video, None);
     }
 
     #[test]

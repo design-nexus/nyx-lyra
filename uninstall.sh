@@ -39,7 +39,6 @@ for a in "${apps[@]}"; do
     news) bins="nyx-news nyx-news-glimpse" ids="News" ;;
     capture) bins="nyx-capture nyx-capture-glimpse" ids="Capture" ;;
     pulse) bins="nyx-pulse nyx-pulse-glimpse" ids="Pulse" ;;
-    lyra) bins="nyx-lyra-probe" ids="LyraPreview" ;;
     *) bins="nyx-$a" ids="${a^}" ;;
   esac
   if [[ $a == glimpse ]]; then

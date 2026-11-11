@@ -31,6 +31,7 @@
     }
     return best;
   };
+  const cookie = (n) => (document.cookie.match(new RegExp("(?:^|; )" + n + "=([^;]*)")) || [])[1];
   const num = (x) => (typeof x === "number" && isFinite(x) ? Math.round(x * 1000) / 1000 : null);
   const snapshot = () => {
     const m = media();
@@ -54,6 +55,8 @@
       error: m && m.error ? m.error.code : null,
       actions: [...handlers.keys()].sort(),
       path: location.pathname,
+      video: new URLSearchParams(location.search).get("v"),
+      signed: !!(cookie("SAPISID") || cookie("__Secure-3PAPISID")),
     };
   };
 
@@ -124,7 +127,6 @@
   // context from ytcfg, and its signed-in header unless auth is false. Only these endpoints.
   const ENDPOINTS = new Set(["search", "browse", "next"]);
   const cfg = (k) => (window.ytcfg && window.ytcfg.get ? window.ytcfg.get(k) : undefined);
-  const cookie = (n) => (document.cookie.match(new RegExp("(?:^|; )" + n + "=([^;]*)")) || [])[1];
   const sha1 = async (s) =>
     [...new Uint8Array(await crypto.subtle.digest("SHA-1", new TextEncoder().encode(s)))].map((b) => b.toString(16).padStart(2, "0")).join("");
   const signedIn = async () => {

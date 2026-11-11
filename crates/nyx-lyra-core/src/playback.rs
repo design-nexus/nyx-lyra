@@ -35,6 +35,7 @@ pub struct Track {
     pub artist: String,
     pub album: Option<String>,
     pub artwork: Option<String>,
+    pub video_id: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
@@ -77,6 +78,7 @@ impl Playback {
             artist: s.artist.clone().unwrap_or_default(),
             album: s.album.clone(),
             artwork: s.artwork.clone(),
+            video_id: s.video.clone(),
         });
         Self {
             status,

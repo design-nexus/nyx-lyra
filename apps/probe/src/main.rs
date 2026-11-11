@@ -19,7 +19,7 @@ use std::{
 };
 use webkit6::prelude::*;
 
-const BRIDGE: &str = include_str!("bridge.js");
+const BRIDGE: &str = nyx_lyra_core::BRIDGE_JS;
 const HOME: &str = "https://music.youtube.com/";
 const MAX_MESSAGE: usize = 16 * 1024;
 const MAX_RESTARTS: usize = 3;

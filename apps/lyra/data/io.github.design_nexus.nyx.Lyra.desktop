@@ -1,14 +1,14 @@
 [Desktop Entry]
 Type=Application
-Name=Lyra Preview
+Name=Lyra
 GenericName=YouTube Music
-Comment=YouTube Music in WebKitGTK, the first step toward Nyx Lyra
-Exec=nyx-lyra-probe
-Icon=io.github.design_nexus.nyx.LyraPreview
+Comment=YouTube Music for NyxOS
+Exec=nyx-lyra
+Icon=io.github.design_nexus.nyx.Lyra
 Terminal=false
 Categories=AudioVideo;Audio;Player;GTK;
 Keywords=youtube;music;ytm;songs;playlists;lyra;
 StartupNotify=true
-StartupWMClass=io.github.design_nexus.nyx.LyraPreview
+StartupWMClass=io.github.design_nexus.nyx.Lyra
 SingleMainWindow=true
 DBusActivatable=false

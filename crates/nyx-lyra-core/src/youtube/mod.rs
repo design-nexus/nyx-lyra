@@ -45,7 +45,8 @@ impl Request {
     }
 }
 
-fn id_ok(id: &str) -> bool {
+/// A YouTube ID as the requests and page addresses take it: letters, digits, `_` and `-`.
+pub fn valid_id(id: &str) -> bool {
     (1..=128).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
 }
 
@@ -57,12 +58,12 @@ pub fn search(query: &str) -> Option<Request> {
 /// A page by its browse ID: one of the constants above, or an album's, artist's or
 /// playlist's from an [`crate::model::Item`].
 pub fn browse(id: &str) -> Option<Request> {
-    id_ok(id).then(|| Request { endpoint: Endpoint::Browse, body: json!({ "browseId": id }) })
+    valid_id(id).then(|| Request { endpoint: Endpoint::Browse, body: json!({ "browseId": id }) })
 }
 
 /// What plays after a song: its queue, and the IDs of its lyrics and related pages.
 pub fn up_next(video_id: &str, playlist_id: Option<&str>) -> Option<Request> {
-    if !id_ok(video_id) || playlist_id.is_some_and(|p| !id_ok(p)) {
+    if !valid_id(video_id) || playlist_id.is_some_and(|p| !valid_id(p)) {
         return None;
     }
     let mut body = json!({ "videoId": video_id, "isAudioOnly": true });

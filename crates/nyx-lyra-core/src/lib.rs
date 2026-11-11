@@ -7,6 +7,9 @@
 //! - [`youtube`]: YouTube Music's data requests and the parsers for their replies.
 //! - [`model`]: songs, albums, artists, playlists and the shelves that hold them.
 
+/// The script the web runtime injects into YouTube Music's page (top frame, at document start).
+pub const BRIDGE_JS: &str = include_str!("../bridge.js");
+
 pub mod bridge;
 pub mod capability;
 pub mod command;

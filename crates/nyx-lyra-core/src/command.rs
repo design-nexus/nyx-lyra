@@ -44,7 +44,7 @@ impl Command {
 
     /// Whether `now` shows the command took effect, given the state when it was sent.
     fn done(&self, before: &Playback, now: &Playback) -> bool {
-        let playing = now.is_playing();
+        let playing = now.is_playing() && now.error.is_none();
         match self {
             Command::Play => playing,
             Command::Pause => now.status == Status::Paused,

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["apps/probe", "crates/nyx-lyra-core"]
+members = ["apps/lyra", "apps/probe", "crates/nyx-lyra-core"]
 
 [workspace.package]
 edition = "2024"
