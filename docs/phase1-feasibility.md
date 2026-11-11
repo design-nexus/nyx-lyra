@@ -88,6 +88,18 @@ videos, which decode video even while hidden.
 | Shuffle, repeat, like, queue, lyrics | — | Not in the Media Session; only in the page itself |
 | Search, home, library, playlists, artists, albums | — | Not tried; see below |
 
+## Decided (11 November 2026)
+
+- **MPRIS:** Lyra publishes its own player (`org.mpris.MediaPlayer2.lyra`, `DesktopEntry` the
+  app ID, local covers, volume). The shell's three MPRIS consumers (nyx-plugin-sdk's service,
+  Control Center's `nyx-providers::media`, the dock) skip a `<id>.Sandboxed.instance-*` player
+  when `<id>` has a player of its own.
+- **Browsing:** native screens everywhere, as in the mockups (direction A), fed by the page's
+  own data. Each capability is reported as available or not, and a screen whose data fails
+  says so rather than guessing.
+- **Laptop first:** Lyra Preview (this probe, `./install.sh lyra`) is on the laptop; no NyxOS
+  package yet.
+
 ## Open questions for Phase 2 and 3
 
 1. **WebKit publishes its own MPRIS player.** While media plays, the web process owns

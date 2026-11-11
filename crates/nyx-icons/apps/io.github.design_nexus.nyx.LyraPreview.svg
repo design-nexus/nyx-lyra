@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#26262a"/><stop offset="1" stop-color="#121214"/></linearGradient>
+    <radialGradient id="glow" cx=".2" cy=".1" r=".9"><stop stop-color="#bba6ff" stop-opacity=".22"/><stop offset="1" stop-color="#bba6ff" stop-opacity="0"/></radialGradient>
+    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#bba6ff"/><stop offset="1" stop-color="#8f6bff"/></linearGradient>
+  </defs>
+  <rect x="8" y="8" width="112" height="112" rx="28" fill="url(#tile)"/>
+  <rect x="8" y="8" width="112" height="112" rx="28" fill="url(#glow)"/>
+  <rect x="8.5" y="8.5" width="111" height="111" rx="27.5" fill="none" stroke="#bba6ff" stroke-opacity=".3"/>
+  <path d="M30 64a34 34 0 1 0 68 0a34 34 0 1 0-68 0z" fill="#bba6ff" fill-opacity=".35"/>
+  <g fill="none" stroke="url(#ink)" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M44 32c-8 16-5 36 12 46M84 32c8 16 5 36-12 46" stroke-width="7"/>
+    <path d="M45 44h38" stroke-width="6"/>
+    <path d="M56 46v30M64 46v34M72 46v30" stroke-width="3.5"/>
+    <path d="M64 82v8M55 94h18" stroke-width="6"/>
+  </g>
+</svg>

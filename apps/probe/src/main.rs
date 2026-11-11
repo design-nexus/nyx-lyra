@@ -2,7 +2,10 @@
 //! bridge in bridge.js. Commands arrive as JSON lines on stdin; events leave as JSON lines on
 //! stdout, each with `t`, the milliseconds since start.
 //!
-//! Environment: LYRA_PROBE_APP_ID (application ID), LYRA_PROBE_MUTE=1 (mute the view),
+//! Installed, it is Lyra Preview: one instance, and closing the window while music plays hides
+//! it until the music stops. Environment: LYRA_PROBE_APP_ID (a test copy: its own application
+//! ID, more than one instance, hidden rather than closed), LYRA_PREVIEW_APP_ID (another ID with
+//! the installed behaviour), LYRA_PROBE_MUTE=1 (mute the view),
 //! LYRA_PROBE_INSPECTOR=1 (developer tools). The first argument is the page to open.
 
 use gtk::{gio, glib, prelude::*};
@@ -48,14 +51,51 @@ fn bridge_message(raw: &str) -> Option<Value> {
 
 fn main() -> glib::ExitCode {
     START.get_or_init(Instant::now);
-    let id = std::env::var("LYRA_PROBE_APP_ID").unwrap_or_else(|_| "io.github.design_nexus.nyx.LyraProbe".into());
+    let test = std::env::var("LYRA_PROBE_APP_ID").ok();
     let uri = std::env::args().nth(1).unwrap_or_else(|| HOME.into());
-    let app = gtk::Application::builder().application_id(id).flags(gio::ApplicationFlags::NON_UNIQUE).build();
-    app.connect_activate(move |app| build(app, &uri));
+    glib::set_application_name("Lyra Preview");
+    let flags = if test.is_some() { gio::ApplicationFlags::NON_UNIQUE } else { gio::ApplicationFlags::empty() };
+    let id = test.clone().or_else(|| std::env::var("LYRA_PREVIEW_APP_ID").ok()).unwrap_or_else(|| APP_ID.into());
+    let app = gtk::Application::builder().application_id(id).flags(flags).build();
+    app.connect_activate(move |app| match app.windows().first() {
+        Some(w) => w.present(),
+        None => build(app, &uri, test.is_some()),
+    });
     app.run_with_args(&["nyx-lyra-probe"])
 }
 
-fn build(app: &gtk::Application, uri: &str) {
+const APP_ID: &str = "io.github.design_nexus.nyx.LyraPreview";
+
+// Closing the window while music plays hides it; it closes once the music has stopped for a
+// while (a short gap between songs isn't stopping).
+fn keep_playing_when_closed(window: &gtk::ApplicationWindow, view: &webkit6::WebView) {
+    let v = view.clone();
+    window.connect_close_request(move |w| {
+        if v.is_playing_audio() {
+            w.set_visible(false);
+            glib::Propagation::Stop
+        } else {
+            glib::Propagation::Proceed
+        }
+    });
+    let w = window.downgrade();
+    view.connect_is_playing_audio_notify(move |v| {
+        if v.is_playing_audio() {
+            return;
+        }
+        let (w, v) = (w.clone(), v.clone());
+        glib::timeout_add_local_once(Duration::from_secs(15), move || {
+            if let Some(w) = w.upgrade()
+                && !w.is_visible()
+                && !v.is_playing_audio()
+            {
+                w.destroy();
+            }
+        });
+    });
+}
+
+fn build(app: &gtk::Application, uri: &str, test: bool) {
     let data = dir("XDG_DATA_HOME", ".local/share");
     let cache = dir("XDG_CACHE_HOME", ".cache");
     for d in [&data, &cache] {
@@ -133,11 +173,21 @@ fn build(app: &gtk::Application, uri: &str) {
         }
     });
 
-    let window = gtk::ApplicationWindow::builder().application(app).title("Lyra probe").default_width(1280).default_height(800).child(&view).build();
-    window.set_hide_on_close(true);
+    let window = gtk::ApplicationWindow::builder()
+        .application(app)
+        .title(if test { "Lyra probe" } else { "Lyra Preview" })
+        .default_width(1280)
+        .default_height(800)
+        .child(&view)
+        .build();
+    if test {
+        window.set_hide_on_close(true);
+        std::mem::forget(app.hold());
+    } else {
+        keep_playing_when_closed(&window, &view);
+    }
     window.present();
     emit(json!({ "event": "window" }));
-    std::mem::forget(app.hold());
     view.load_uri(uri);
 
     let (tx, rx) = mpsc::channel::<String>();
@@ -181,6 +231,10 @@ fn command(app: &gtk::Application, window: &gtk::ApplicationWindow, view: &webki
         "hide" => {
             window.set_visible(false);
             done("hidden".into())
+        }
+        "close" => {
+            window.close();
+            done(window.is_visible().into())
         }
         "show" => {
             window.set_visible(true);

@@ -6,7 +6,9 @@ web player in WebKitGTK 6.0 and is separate from Nyx Music (local music, radio, 
 Not built yet. What's here:
 
 - `apps/probe`: the Phase 1 feasibility probe, a WebKitGTK window on YouTube Music with a
-  narrow playback bridge, driven by JSON lines on stdin.
+  narrow playback bridge, driven by JSON lines on stdin. `./install.sh` installs it as
+  **Lyra Preview** (`~/.local/bin/nyx-lyra-probe`, in the app launcher): one window on YouTube
+  Music that keeps playing when closed, until the music stops. `./uninstall.sh` removes it.
 - `tools/`: start the probe on a headless output (`headless.sh`), drive and check it
   (`drive.py`), measure it (`measure.py`, `longrun.py`).
 - `docs/phase0-audit.md`: what Lyra reuses from the Nyx repositories.
