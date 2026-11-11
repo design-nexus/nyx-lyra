@@ -1,0 +1,18 @@
+[package]
+name = "nyx-lyra-probe"
+version = "0.1.0"
+description = "Phase 1 feasibility probe: YouTube Music in WebKitGTK 6.0 with a narrow playback bridge"
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "nyx-lyra-probe"
+path = "src/main.rs"
+
+[dependencies]
+glib = "0.22"
+gtk = { version = "0.11", package = "gtk4", features = ["v4_18"] }
+serde_json = "1"
+webkit6 = { version = "0.6.1", features = ["v2_50"] }
