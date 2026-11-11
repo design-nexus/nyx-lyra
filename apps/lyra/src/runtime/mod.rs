@@ -16,6 +16,8 @@ pub enum Load {
     Watch { video_id: String, playlist_id: Option<String>, at: Option<u32> },
     /// A playlist or album's list from its start.
     List { playlist_id: String },
+    /// Google's sign-in page for YouTube Music (where its own Sign in button leads).
+    SignIn,
 }
 
 #[derive(Clone, Debug)]

@@ -36,6 +36,7 @@ pub struct Track {
     pub album: Option<String>,
     pub artwork: Option<String>,
     pub video_id: Option<String>,
+    pub playlist_id: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
@@ -61,6 +62,8 @@ pub struct Playback {
     pub connection: Connection,
     /// The media element reported an error (its MediaError code).
     pub error: Option<u16>,
+    /// Whether the page has a signed-in YouTube Music session, once it says.
+    pub signed_in: Option<bool>,
 }
 
 impl Playback {
@@ -79,6 +82,7 @@ impl Playback {
             album: s.album.clone(),
             artwork: s.artwork.clone(),
             video_id: s.video.clone(),
+            playlist_id: s.list.clone(),
         });
         Self {
             status,
@@ -96,6 +100,7 @@ impl Playback {
             },
             connection,
             error: s.error,
+            signed_in: s.signed,
         }
     }
 

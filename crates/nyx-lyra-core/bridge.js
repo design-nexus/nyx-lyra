@@ -56,6 +56,7 @@
       actions: [...handlers.keys()].sort(),
       path: location.pathname,
       video: new URLSearchParams(location.search).get("v"),
+      list: new URLSearchParams(location.search).get("list"),
       signed: !!(cookie("SAPISID") || cookie("__Secure-3PAPISID")),
     };
   };

@@ -18,6 +18,7 @@ pub const HOME: &str = "https://music.youtube.com/";
 /// Pages that may load in the view: YouTube Music, and the hosts Google's sign-in passes through.
 const HOSTS: &[&str] = &["music.youtube.com", "www.youtube.com", "accounts.youtube.com", "consent.youtube.com", "accounts.google.com", "gds.google.com"];
 const MAX_ENDS: usize = 3;
+const SIGN_IN: &str = "https://accounts.google.com/ServiceLogin?ltmpl=music&service=youtube&passive=true&continue=https%3A%2F%2Fwww.youtube.com%2Fsignin%3Faction_handle_signin%3Dtrue%26app%3Ddesktop%26next%3Dhttps%253A%252F%252Fmusic.youtube.com%252F";
 
 pub struct WebRuntime {
     view: webkit6::WebView,
@@ -103,7 +104,9 @@ impl WebRuntime {
         });
         let ev = on_event.clone();
         view.connect_load_failed(move |_, _, uri, error| {
-            if allowed(uri) {
+            // A load replaced by another (Lyra loading a song while Home loads) isn't a failure.
+            let replaced = error.matches(webkit6::NetworkError::Cancelled) || error.matches(webkit6::PolicyError::FrameLoadInterruptedByPolicyChange);
+            if allowed(uri) && !replaced {
                 ev(Event::LoadFailed(error.message().to_string()));
             }
             false
@@ -162,6 +165,7 @@ impl Runtime for WebRuntime {
             Load::Home => true,
             Load::Watch { video_id, playlist_id, .. } => valid_id(video_id) && playlist_id.as_deref().is_none_or(valid_id),
             Load::List { playlist_id } => valid_id(playlist_id),
+            Load::SignIn => true,
         };
         if !ok {
             eprintln!("nyx-lyra: refused to load {target:?}");
@@ -180,6 +184,7 @@ impl Runtime for WebRuntime {
                 u
             }
             Load::List { playlist_id } => format!("{HOME}watch?list={playlist_id}"),
+            Load::SignIn => SIGN_IN.to_string(),
         };
         self.view.load_uri(&uri);
     }

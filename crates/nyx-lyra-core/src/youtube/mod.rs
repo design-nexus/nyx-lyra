@@ -61,6 +61,13 @@ pub fn browse(id: &str) -> Option<Request> {
     valid_id(id).then(|| Request { endpoint: Endpoint::Browse, body: json!({ "browseId": id }) })
 }
 
+/// The next part of a long list (a playlist's songs, the library), from
+/// [`crate::model::Page::continuation`].
+pub fn more(token: &str) -> Option<Request> {
+    let ok = (1..=4096).contains(&token.len()) && token.bytes().all(|b| b.is_ascii_alphanumeric() || b"_-%=".contains(&b));
+    ok.then(|| Request { endpoint: Endpoint::Browse, body: json!({ "continuation": token }) })
+}
+
 /// What plays after a song: its queue, and the IDs of its lyrics and related pages.
 pub fn up_next(video_id: &str, playlist_id: Option<&str>) -> Option<Request> {
     if !valid_id(video_id) || playlist_id.is_some_and(|p| !valid_id(p)) {

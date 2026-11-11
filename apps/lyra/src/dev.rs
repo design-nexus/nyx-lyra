@@ -14,6 +14,11 @@ pub fn enabled() -> bool {
     std::env::var("NYX_LYRA_DEV").as_deref() == Ok("1")
 }
 
+/// NYX_LYRA_NO_WINDOW=1 (with the dev channel): the window is built but never shown.
+pub fn windowless() -> bool {
+    enabled() && std::env::var("NYX_LYRA_NO_WINDOW").as_deref() == Ok("1")
+}
+
 fn out(mut v: Value, start: Instant) {
     v["t"] = (start.elapsed().as_millis() as u64).into();
     println!("{v}");
@@ -63,16 +68,46 @@ fn handle(player: &Rc<Player>, app: &gtk::Application, line: &str, start: Instan
         "state" => return out(json!({ "event": "state", "state": player.state() }), start),
         "mute" => return player.set_muted(true),
         "crash" => return player.terminate(),
+        // Screens, for the screenshot checks.
+        "nav" => {
+            use crate::ui::{Route, Tab};
+            let route = match s("to").as_str() {
+                "explore" => Route::Explore,
+                "search" => Route::Search(s("query")),
+                "liked" => Route::Liked,
+                "library" => Route::Library(match s("tab").as_str() {
+                    "albums" => Tab::Albums,
+                    "artists" => Tab::Artists,
+                    "songs" => Tab::Songs,
+                    _ => Tab::Playlists,
+                }),
+                "browse" => Route::Browse { id: s("id"), title: s("title") },
+                _ => Route::Home,
+            };
+            crate::ui::navigate(route);
+            return out(json!({ "event": "nav" }), start);
+        }
+        "now" => return crate::ui::open_now(&s("tab")),
+        "close-now" => return crate::ui::close_now(),
+        "mini" => return crate::ui::mini::toggle(),
+        // Map the window the tests built hidden (tools/headless.sh checks the rules first).
+        "show" => {
+            if let Some(w) = app.windows().first() {
+                w.present();
+            }
+            return out(json!({ "event": "shown" }), start);
+        }
         "watch" => {
             let id = |k: &str| c.get(k).and_then(Value::as_str).map(String::from);
             let ok = player.play_ids(id("video"), id("playlist"));
             return out(json!({ "event": "watch", "loading": ok }), start);
         }
         "quit" => return app.quit(),
-        "search" | "browse" | "up-next" => {
+        "search" | "browse" | "up-next" | "more" => {
             let req = match s("cmd").as_str() {
                 "search" => youtube::search(&s("query")),
                 "browse" => youtube::browse(&s("id")),
+                "more" => youtube::more(&s("token")),
                 _ => youtube::up_next(&s("video"), None),
             };
             let Some(req) = req else { return out(json!({ "event": "data", "error": "bad-argument" }), start) };
@@ -82,6 +117,10 @@ fn handle(player: &Rc<Player>, app: &gtk::Application, line: &str, start: Instan
                 &req,
                 Box::new(move |r| {
                     let ms = t0.elapsed().as_millis() as u64;
+                    // NYX_LYRA_DUMP=DIR keeps each raw reply (they hold the account's own data).
+                    if let (Ok(v), Some(dir)) = (&r, std::env::var_os("NYX_LYRA_DUMP")) {
+                        let _ = std::fs::write(std::path::Path::new(&dir).join(format!("reply-{kind}-{ms}.json")), v.to_string());
+                    }
                     let v = match r {
                         Err(e) => json!({ "event": "data", "kind": kind, "error": e.to_string(), "ms": ms }),
                         Ok(v) if kind == "up-next" => match youtube::next(&v) {
@@ -89,7 +128,7 @@ fn handle(player: &Rc<Player>, app: &gtk::Application, line: &str, start: Instan
                             Err(e) => json!({ "event": "data", "kind": kind, "ms": ms, "error": e.to_string() }),
                         },
                         Ok(v) => match youtube::page(&v) {
-                            Ok(p) => json!({ "event": "data", "kind": kind, "ms": ms, "header": p.header.as_ref().map(|h| &h.title),
+                            Ok(p) => json!({ "event": "data", "kind": kind, "ms": ms, "header": p.header.as_ref().map(|h| &h.title), "continuation": p.continuation,
                                 "shelves": p.shelves.iter().map(|s| json!({ "title": s.title, "items": s.items.len(),
                                     "first": s.items.first().map(|i| json!({ "title": i.title, "kind": i.kind, "playable": i.playable() })) })).collect::<Vec<_>>() }),
                             Err(e) => json!({ "event": "data", "kind": kind, "ms": ms, "error": e.to_string() }),

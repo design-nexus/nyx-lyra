@@ -49,9 +49,13 @@ pub fn page(v: &Value) -> Result<Page, ParseError> {
     shelves.retain(|s: &Shelf| !s.items.is_empty());
     let header = find_header(v);
     if shelves.is_empty() && header.is_none() {
+        // An empty library page is only a message ("Albums you save will show up here").
+        if find(v, "messageRenderer").is_some() {
+            return Ok(Page::default());
+        }
         return Err(ParseError::Unrecognized);
     }
-    Ok(Page { header, shelves })
+    Ok(Page { header, shelves, continuation: continuation(v) })
 }
 
 /* ── Small readers ─────────────────────────────────────────────────────────────── */
@@ -99,8 +103,10 @@ fn page_type(endpoint: &Value) -> Option<&str> {
     str_at(endpoint, "/browseEndpoint/browseEndpointContextSupportedConfigs/browseEndpointContextMusicConfig/pageType")
 }
 
+/// A watch endpoint's music type; one without (a plain YouTube video) counts as a video.
 fn video_type(endpoint: &Value) -> Option<&str> {
-    str_at(endpoint, "/watchEndpoint/watchEndpointMusicSupportedConfigs/watchEndpointMusicConfig/musicVideoType")
+    let w = endpoint.get("watchEndpoint")?;
+    Some(str_at(w, "/watchEndpointMusicSupportedConfigs/watchEndpointMusicConfig/musicVideoType").unwrap_or("MUSIC_VIDEO_TYPE_OMV"))
 }
 
 fn kind_of(page: Option<&str>, video: Option<&str>, first_label: &str) -> Kind {
@@ -188,6 +194,10 @@ fn list_item(r: &Value) -> Option<Item> {
     }
     let title_ep = runs(cols.first().copied()).first().and_then(|x| x.get("navigationEndpoint"));
     let row_ep = r.get("navigationEndpoint");
+    // "Shuffle all" heading a list is an action, not a song; Lyra has its own.
+    if cols.len() == 1 && title_ep.is_none() && row_ep.is_some_and(|e| e.get("watchPlaylistEndpoint").is_some()) {
+        return None;
+    }
     let rest: Vec<&Value> = cols.iter().skip(1).flat_map(|c| runs(Some(c))).collect();
     let rest_owned: Vec<Value> = rest.iter().map(|v| (*v).clone()).collect();
     let (mut artists, album) = people(&rest_owned);
@@ -329,6 +339,12 @@ fn collect_shelves(v: &Value, out: &mut Vec<Shelf>) {
                         let title = text(r.pointer("/header/musicCardShelfHeaderBasicRenderer/title"));
                         out.push(Shelf { title: if title.is_empty() { "Top result".into() } else { title }, items, more: None });
                     }
+                    // The next part of a long list.
+                    "appendContinuationItemsAction" => out.push(Shelf { title: String::new(), items: rows(r.get("continuationItems")), more: None }),
+                    "musicShelfContinuation" | "musicPlaylistShelfContinuation" => {
+                        out.push(Shelf { title: String::new(), items: rows(r.get("contents")), more: None })
+                    }
+                    "gridContinuation" => out.push(Shelf { title: String::new(), items: rows(r.get("items")), more: None }),
                     // Search lists each result in its own section; consecutive ones make one shelf.
                     "itemSectionRenderer" => {
                         let items = rows(r.get("contents"));
@@ -384,6 +400,13 @@ fn find_header(v: &Value) -> Option<Header> {
         }
     }
     None
+}
+
+fn continuation(v: &Value) -> Option<String> {
+    find(v, "continuationItemRenderer")
+        .and_then(|c| str_at(c, "/continuationEndpoint/continuationCommand/token"))
+        .or_else(|| find(v, "nextContinuationData").and_then(|c| str_at(c, "/continuation")))
+        .map(String::from)
 }
 
 /* ── Up next and lyrics ────────────────────────────────────────────────────────── */

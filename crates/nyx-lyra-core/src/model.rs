@@ -1,8 +1,8 @@
 //! Songs, albums, artists and playlists as Lyra shows them.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Kind {
     Song,
@@ -16,7 +16,7 @@ pub enum Kind {
     Other,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Thumbnail {
     pub url: String,
     pub width: u32,
@@ -24,13 +24,13 @@ pub struct Thumbnail {
 }
 
 /// A name that may lead somewhere (an artist's or album's page).
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Link {
     pub name: String,
     pub browse_id: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Item {
     pub kind: Kind,
     pub title: String,
@@ -57,7 +57,7 @@ impl Item {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Shelf {
     pub title: String,
     pub items: Vec<Item>,
@@ -65,7 +65,7 @@ pub struct Shelf {
     pub more: Option<String>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Header {
     pub title: String,
     pub subtitle: String,
@@ -75,10 +75,13 @@ pub struct Header {
 }
 
 /// A page of YouTube Music: Home, a search, an album, an artist, a playlist, the library.
-#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Page {
     pub header: Option<Header>,
     pub shelves: Vec<Shelf>,
+    /// More of the last shelf, fetched with [`crate::youtube::more`].
+    #[serde(default)]
+    pub continuation: Option<String>,
 }
 
 impl Page {

@@ -34,6 +34,9 @@ pub struct Player {
     replays: RefCell<(Option<String>, u32)>,
     /// Where to seek once the song plays again after a recovery (seeking earlier fails).
     seek_after_play: Cell<Option<u32>>,
+    /// The song a recovery brought back, until it plays: if the page skips it (its stream
+    /// kept failing), Lyra loads it once more.
+    recovering: RefCell<Option<(String, bool)>>,
 }
 
 /// In WebKitGTK 2.54, the first song a new web process plays often fails: the audio branch
@@ -55,6 +58,7 @@ impl Player {
             want_play: Cell::new(false),
             replays: RefCell::default(),
             seek_after_play: Cell::new(None),
+            recovering: RefCell::default(),
         })
     }
 
@@ -147,6 +151,20 @@ impl Player {
             return;
         }
         if now.status == Status::Playing && now.error.is_none() && now.position.is_some_and(|p| p > 0.5) {
+            let playing = now.track.as_ref().and_then(|t| t.video_id.clone());
+            let wanted = self.recovering.borrow().clone();
+            if let Some((video_id, retried)) = wanted {
+                if playing.as_deref() != Some(video_id.as_str()) && !retried {
+                    eprintln!("nyx-lyra: the page skipped the song being recovered; loading it again");
+                    *self.recovering.borrow_mut() = Some((video_id.clone(), true));
+                    *self.replays.borrow_mut() = (None, 0);
+                    if let Some(rt) = self.runtime() {
+                        rt.load(Load::Watch { video_id, playlist_id: None, at: None });
+                    }
+                    return;
+                }
+            }
+            *self.recovering.borrow_mut() = None;
             self.want_play.set(false);
             if let Some(at) = self.seek_after_play.take() {
                 self.send(Command::Seek { position: at as f64 });
@@ -193,6 +211,13 @@ impl Player {
         match self.runtime() {
             Some(rt) if self.state().connection == Connection::Ready => rt.request(request, reply),
             _ => reply(Err(runtime::RequestError::NotReady)),
+        }
+    }
+
+    /// Show Google's sign-in page in the page (the sign-in card holds it).
+    pub fn sign_in(&self) {
+        if let Some(rt) = self.runtime() {
+            rt.load(Load::SignIn);
         }
     }
 
@@ -285,6 +310,9 @@ impl Player {
             return;
         }
         *self.resume.borrow_mut() = None;
+        if r.playing {
+            *self.recovering.borrow_mut() = Some((r.video_id.clone(), false));
+        }
         self.want_play.set(r.playing);
         self.seek_after_play.set((r.at > 3).then_some(r.at));
         if r.playing && !now.is_playing() {

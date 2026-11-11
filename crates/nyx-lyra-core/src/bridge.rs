@@ -34,6 +34,8 @@ pub struct State {
     pub path: Option<String>,
     /// The watch page's song (`?v=`), which the web client keeps in the address.
     pub video: Option<String>,
+    /// The list it plays from (`?list=`): an album, a playlist or a radio.
+    pub list: Option<String>,
     /// Whether the page has a signed-in session (only the answer leaves the page).
     pub signed: Option<bool>,
 }
@@ -76,7 +78,9 @@ fn clean(s: &mut State) {
         *t = t.take().map(|x| text(&x)).filter(|x| !x.is_empty());
     }
     s.artwork = s.artwork.take().filter(|u| u.len() <= 2048 && u.starts_with("https://"));
-    s.video = s.video.take().filter(|v| (1..=64).contains(&v.len()) && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'));
+    for id in [&mut s.video, &mut s.list] {
+        *id = id.take().filter(|v| crate::youtube::valid_id(v));
+    }
     for n in [&mut s.position, &mut s.duration] {
         *n = n.filter(|x| x.is_finite() && *x >= 0.0);
     }

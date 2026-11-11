@@ -118,6 +118,19 @@ fn album_header() {
 }
 
 #[test]
+fn continuations() {
+    let first = json!({ "contents": { "twoColumnBrowseResultsRenderer": { "secondaryContents": { "sectionListRenderer": { "contents": [ { "musicPlaylistShelfRenderer": {
+        "contents": [ song_row(), { "continuationItemRenderer": { "continuationEndpoint": { "continuationCommand": { "token": "4qmFsgK_abc%3D" } } } } ] } } ] } } } } });
+    let p = page(&first).unwrap();
+    assert_eq!(p.continuation.as_deref(), Some("4qmFsgK_abc%3D"));
+    assert!(crate::youtube::more(p.continuation.as_deref().unwrap()).is_some());
+    let next = json!({ "onResponseReceivedActions": [ { "appendContinuationItemsAction": { "continuationItems": [ song_row(), song_row() ] } } ] });
+    let p = page(&next).unwrap();
+    assert_eq!(p.items().count(), 2);
+    assert_eq!(p.continuation, None);
+}
+
+#[test]
 fn errors() {
     assert_eq!(page(&json!({ "error": { "code": 401, "message": "Unauthorized" } })), Err(ParseError::Server { code: 401, message: "Unauthorized".into() }));
     assert_eq!(page(&json!({ "contents": { "somethingElse": [] } })), Err(ParseError::Unrecognized));
@@ -159,7 +172,7 @@ fn real_replies() {
     for entry in std::fs::read_dir(dir).unwrap().flatten() {
         let path = entry.path();
         let name = path.file_name().unwrap().to_string_lossy().to_string();
-        if !(name.starts_with("data-") && name.ends_with(".json")) {
+        if !((name.starts_with("data-") || name.starts_with("reply-")) && name.ends_with(".json")) {
             continue;
         }
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
@@ -174,15 +187,26 @@ fn real_replies() {
             println!("{name}: signed out");
             continue;
         }
+        if find(&v, "musicDescriptionShelfRenderer").is_some() && find(&v, "musicResponsiveListItemRenderer").is_none() {
+            let l = lyrics(&v).unwrap_or_else(|e| panic!("{name}: {e}"));
+            println!("{name}: lyrics, {} lines, {:?}", l.as_ref().map_or(0, |l| l.text.lines().count()), l.map(|l| l.source));
+            continue;
+        }
         let p = page(&v).unwrap_or_else(|e| panic!("{name}: {e}"));
+        if p.shelves.is_empty() && p.header.is_none() {
+            println!("{name}: empty");
+            continue;
+        }
         let n = p.items().count();
         let untitled = p.items().filter(|i| i.title.is_empty()).count();
         let unplayable = p.items().filter(|i| !i.playable() && i.browse_id.is_none()).count();
+        let other = p.items().filter(|i| i.kind == Kind::Other).count();
         println!(
-            "{name}: {} shelves {:?}, {n} items, header {:?}, {unplayable} lead nowhere",
+            "{name}: {} shelves {:?}, {n} items ({other} other), header {:?}, {unplayable} lead nowhere, more {}",
             p.shelves.len(),
             p.shelves.iter().map(|s| s.title.as_str()).collect::<Vec<_>>(),
-            p.header.as_ref().map(|h| &h.title)
+            p.header.as_ref().map(|h| &h.title),
+            p.continuation.is_some()
         );
         assert!(n > 0 || p.header.is_some());
         assert_eq!(untitled, 0);

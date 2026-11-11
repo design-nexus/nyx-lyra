@@ -3,9 +3,10 @@
 YouTube Music for NyxOS, in GTK4 and Nyx Design 2.0. Lyra plays through YouTube Music's own
 web player in WebKitGTK 6.0 and is separate from Nyx Music (local music, radio, podcasts).
 
-In progress. Today the window shows YouTube Music's own page; underneath, Lyra's core drives
-it (commands confirmed by the page, recovery after a crash, keep playing when the window
-closes). The native interface (nyx-design's `mockups/lyra`, direction A) comes next.
+In progress. The native window (nyx-design's `mockups/lyra`, direction A) has Home, Explore,
+Search, the library, albums, artists and playlists, the now-playing column, the player bar,
+Now playing with Up next, Lyrics and Related, and the strip mini-player, all from YouTube
+Music's own data. Media keys, the bar's media controls, `nyx lyra …` and Glimpse come next.
 
 ## Install
 
@@ -29,7 +30,7 @@ the window the first time; YouTube Music doesn't play anything signed out.
   `check-app.py` checks Lyra end to end, `drive.py` the probe, `measure.py` and
   `longrun.py` measure them.
 - `docs/`: [Phase 0 audit](docs/phase0-audit.md), [Phase 1 feasibility](docs/phase1-feasibility.md),
-  [Phase 2 core](docs/phase2-core.md).
+  [Phase 2 core](docs/phase2-core.md), [Phases 3 and 4](docs/phase3-4-window.md).
 
 ## License
 
