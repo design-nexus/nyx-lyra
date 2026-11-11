@@ -4,7 +4,7 @@
 
 use crate::runtime::{self, Load, Reply, Runtime};
 use gtk::glib;
-use nyx_lyra_core::command::{Command, CommandId, Coordinator, Event, Send};
+use nyx_lyra_core::command::{Command, CommandId, Coordinator, Event, Failure, Send};
 use nyx_lyra_core::model::Item;
 use nyx_lyra_core::playback::{Connection, Playback, Status};
 use nyx_lyra_core::youtube::Request;
@@ -20,10 +20,19 @@ struct Resume {
     playing: bool,
 }
 
+type Waiter = Box<dyn FnOnce(Result<Command, Failure>)>;
+
+/// How long a request waits for the page to load (a cold start takes a few seconds).
+const REQUEST_WAIT: Duration = Duration::from_secs(30);
+
+type Listener = Rc<dyn Fn(&Event)>;
+
 pub struct Player {
     runtime: RefCell<Option<Rc<dyn Runtime>>>,
+    /// Who waits for a command's outcome (the actions answer only once the page confirms).
+    waiters: RefCell<std::collections::HashMap<CommandId, Waiter>>,
     coord: RefCell<Coordinator>,
-    listeners: RefCell<Vec<Rc<dyn Fn(&Event)>>>,
+    listeners: RefCell<Vec<Listener>>,
     last: RefCell<Option<Resume>>,
     resume: RefCell<Option<Resume>>,
     retries: Cell<u32>,
@@ -34,9 +43,11 @@ pub struct Player {
     replays: RefCell<(Option<String>, u32)>,
     /// Where to seek once the song plays again after a recovery (seeking earlier fails).
     seek_after_play: Cell<Option<u32>>,
-    /// The song a recovery brought back, until it plays: if the page skips it (its stream
-    /// kept failing), Lyra loads it once more.
+    /// The song Lyra was asked to play (or a recovery brought back), until it plays: if the
+    /// page skips it (its stream kept failing), Lyra loads it once more.
     recovering: RefCell<Option<(String, bool)>>,
+    /// Requests made while the page was still loading, sent once it's ready.
+    pending: RefCell<Vec<(Request, Reply, Instant)>>,
 }
 
 /// In WebKitGTK 2.54, the first song a new web process plays often fails: the audio branch
@@ -49,6 +60,7 @@ impl Player {
     pub fn new() -> Rc<Self> {
         Rc::new(Self {
             runtime: RefCell::default(),
+            waiters: RefCell::default(),
             coord: RefCell::default(),
             listeners: RefCell::default(),
             last: RefCell::default(),
@@ -59,6 +71,7 @@ impl Player {
             replays: RefCell::default(),
             seek_after_play: Cell::new(None),
             recovering: RefCell::default(),
+            pending: RefCell::default(),
         })
     }
 
@@ -70,6 +83,7 @@ impl Player {
             let Some(p) = me.upgrade() else { return glib::ControlFlow::Break };
             let events = p.coord.borrow_mut().tick(Instant::now());
             p.emit(events);
+            p.expire_pending();
             glib::ControlFlow::Continue
         });
     }
@@ -88,7 +102,27 @@ impl Player {
             for l in &listeners {
                 l(e);
             }
+            let outcome = match e {
+                Event::Confirmed { id, command } => Some((*id, Ok(command.clone()))),
+                Event::Failed { id, failure, .. } => Some((*id, Err(failure.clone()))),
+                Event::State(_) => None,
+            };
+            if let Some((id, outcome)) = outcome {
+                let waiter = self.waiters.borrow_mut().remove(&id);
+                if let Some(w) = waiter {
+                    w(outcome);
+                }
+            }
         }
+    }
+
+    /// Send a command and hear how it ended: confirmed by the page, or why not.
+    pub fn send_then(&self, command: Command, done: impl FnOnce(Result<Command, Failure>) + 'static) {
+        // Registered before sending: a command can fail at once.
+        let id = self.coord.borrow().next_id();
+        self.waiters.borrow_mut().insert(id, Box::new(done));
+        let sent = self.send(command);
+        debug_assert_eq!(sent, id);
     }
 
     pub fn state(&self) -> Playback {
@@ -101,6 +135,8 @@ impl Player {
             Command::Play => self.want_play.set(true),
             Command::Toggle => self.want_play.set(!self.state().is_playing()),
             Command::Pause => self.want_play.set(false),
+            // Moving on by hand ends any wait for a song Lyra was asked to play.
+            Command::Next | Command::Previous => *self.recovering.borrow_mut() = None,
             _ => {}
         }
         let sent = self.coord.borrow_mut().send(command, Instant::now());
@@ -125,11 +161,38 @@ impl Player {
 
     /// Start playing a song, album or playlist from Lyra's own screens.
     #[allow(dead_code)] // the screens come in Phase 4
-    pub fn play(&self, item: &Item) -> bool {
+    pub fn play(self: &Rc<Self>, item: &Item) -> bool {
         self.play_ids(item.video_id.clone(), item.playlist_id.clone())
     }
 
-    pub fn play_ids(&self, video_id: Option<String>, playlist_id: Option<String>) -> bool {
+    pub fn play_ids(self: &Rc<Self>, video_id: Option<String>, playlist_id: Option<String>) -> bool {
+        // A list alone gives the page nothing to start: find its first song, as YouTube
+        // Music's own Play does, and play that in the list.
+        if let (None, Some(list)) = (&video_id, &playlist_id) {
+            let Some(req) = nyx_lyra_core::youtube::list_start(list) else { return false };
+            let me = Rc::downgrade(self);
+            let list = list.clone();
+            self.request(
+                &req,
+                Box::new(move |r| {
+                    let Some(p) = me.upgrade() else { return };
+                    let first = r
+                        .ok()
+                        .and_then(|v| nyx_lyra_core::youtube::next(&v).ok())
+                        .and_then(|n| n.queue.into_iter().find_map(|i| i.video_id));
+                    match first {
+                        Some(v) => {
+                            p.play_ids(Some(v), Some(list));
+                        }
+                        None => eprintln!("nyx-lyra: couldn't find the first song of {list}"),
+                    }
+                }),
+            );
+            return true;
+        }
+        // The page may skip a song whose stream keeps failing; Lyra loads it once more then.
+        *self.recovering.borrow_mut() = video_id.clone().map(|v| (v, false));
+        *self.replays.borrow_mut() = (None, 0);
         let target = match (video_id, playlist_id) {
             (Some(video_id), playlist_id) => Load::Watch { video_id, playlist_id, at: None },
             (None, Some(playlist_id)) => Load::List { playlist_id },
@@ -153,16 +216,17 @@ impl Player {
         if now.status == Status::Playing && now.error.is_none() && now.position.is_some_and(|p| p > 0.5) {
             let playing = now.track.as_ref().and_then(|t| t.video_id.clone());
             let wanted = self.recovering.borrow().clone();
-            if let Some((video_id, retried)) = wanted {
-                if playing.as_deref() != Some(video_id.as_str()) && !retried {
-                    eprintln!("nyx-lyra: the page skipped the song being recovered; loading it again");
-                    *self.recovering.borrow_mut() = Some((video_id.clone(), true));
-                    *self.replays.borrow_mut() = (None, 0);
-                    if let Some(rt) = self.runtime() {
-                        rt.load(Load::Watch { video_id, playlist_id: None, at: None });
-                    }
-                    return;
+            if let Some((video_id, retried)) = wanted
+                && playing.as_deref() != Some(video_id.as_str())
+                && !retried
+            {
+                eprintln!("nyx-lyra: the page skipped the song Lyra was asked for; loading it again");
+                *self.recovering.borrow_mut() = Some((video_id.clone(), true));
+                *self.replays.borrow_mut() = (None, 0);
+                if let Some(rt) = self.runtime() {
+                    rt.load(Load::Watch { video_id, playlist_id: None, at: None });
                 }
+                return;
             }
             *self.recovering.borrow_mut() = None;
             self.want_play.set(false);
@@ -208,9 +272,34 @@ impl Player {
     }
 
     pub fn request(&self, request: &Request, reply: Reply) {
-        match self.runtime() {
-            Some(rt) if self.state().connection == Connection::Ready => rt.request(request, reply),
+        match (self.runtime(), self.state().connection) {
+            (Some(rt), Connection::Ready) => rt.request(request, reply),
+            (Some(_), Connection::Starting | Connection::Reconnecting) => {
+                self.pending.borrow_mut().push((request.clone(), reply, Instant::now()))
+            }
             _ => reply(Err(runtime::RequestError::NotReady)),
+        }
+    }
+
+    fn send_pending(&self) {
+        let Some(rt) = self.runtime() else { return };
+        let pending = std::mem::take(&mut *self.pending.borrow_mut());
+        for (request, reply, _) in pending {
+            rt.request(&request, reply);
+        }
+    }
+
+    fn expire_pending(&self) {
+        let lost = self.state().connection == Connection::Lost;
+        let expired: Vec<_> = {
+            let mut pending = self.pending.borrow_mut();
+            let (old, keep) =
+                std::mem::take(&mut *pending).into_iter().partition(|(_, _, at)| lost || at.elapsed() > REQUEST_WAIT);
+            *pending = keep;
+            old
+        };
+        for (_, reply, _) in expired {
+            reply(Err(runtime::RequestError::NotReady));
         }
     }
 
@@ -246,12 +335,13 @@ impl Player {
                 }
                 events.extend(self.coord.borrow_mut().report(&s));
                 let now = self.state();
-                if let (Some(t), Some(pos)) = (&now.track, now.position) {
-                    if let Some(v) = &t.video_id {
-                        *self.last.borrow_mut() = Some(Resume { video_id: v.clone(), at: pos as u32, playing: now.is_playing() });
-                    }
+                if let (Some(t), Some(pos)) = (&now.track, now.position)
+                    && let Some(v) = &t.video_id
+                {
+                    *self.last.borrow_mut() = Some(Resume { video_id: v.clone(), at: pos as u32, playing: now.is_playing() });
                 }
                 self.emit(events);
+                self.send_pending();
                 self.finish_resume(&now);
                 self.replay_if_failed(&now);
             }
@@ -262,7 +352,7 @@ impl Player {
             runtime::Event::Rejected(why) => {
                 let n = self.rejected.get() + 1;
                 self.rejected.set(n);
-                if n == 1 || n % 100 == 0 {
+                if n == 1 || n.is_multiple_of(100) {
                     eprintln!("nyx-lyra: ignored {n} page message(s) that failed the checks ({why:?})");
                 }
             }

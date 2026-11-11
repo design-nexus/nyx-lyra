@@ -30,7 +30,10 @@ pub enum Route {
     Library(Tab),
     Liked,
     /// An album's, artist's or playlist's page.
-    Browse { id: String, title: String },
+    Browse {
+        id: String,
+        title: String,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -262,8 +265,8 @@ impl Ui {
         self.column.update(s);
         self.now.update(s);
         mini::update(s);
-        // Pages asked for before YouTube Music was ready (or while it reconnected) load now.
-        if s.connection == Connection::Ready && self.connection.get() != Connection::Ready && s.signed_in != Some(false) {
+        // Requests wait while the page loads or reconnects; after it was lost they failed.
+        if s.connection == Connection::Ready && self.connection.get() == Connection::Lost && s.signed_in != Some(false) {
             glib::idle_add_local_once(refresh);
         }
         self.connection.set(s.connection);
@@ -286,14 +289,17 @@ impl Ui {
         if video.is_some() && *self.queued_for.borrow() != video {
             *self.queued_for.borrow_mut() = video.clone();
             // A song played on its own continues with its radio, as YouTube Music's page does.
-            let list = s.track.as_ref().and_then(|t| t.playlist_id.clone()).or_else(|| video.as_ref().map(|v| format!("RDAMVM{v}")));
+            let list =
+                s.track.as_ref().and_then(|t| t.playlist_id.clone()).or_else(|| video.as_ref().map(|v| format!("RDAMVM{v}")));
             if let (Some(req), Some(p)) = (youtube::up_next(video.as_deref().unwrap_or_default(), list.as_deref()), player()) {
                 let me = Rc::downgrade(self);
                 p.request(
                     &req,
                     Box::new(move |r| {
                         let Some(ui) = me.upgrade() else { return };
-                        if let Ok(n) = r.and_then(|v| youtube::next(&v).map_err(|e| crate::runtime::RequestError::Failed(e.to_string()))) {
+                        if let Ok(n) =
+                            r.and_then(|v| youtube::next(&v).map_err(|e| crate::runtime::RequestError::Failed(e.to_string())))
+                        {
                             *ui.next.borrow_mut() = Some(n);
                             ui.column.set_queue(ui.next.borrow().as_ref());
                             ui.now.set_queue(ui.next.borrow().as_ref());
@@ -459,10 +465,10 @@ pub fn activate(item: &Item) {
 
 pub fn play(item: &Item) {
     let Some(p) = player() else { return };
-    if !p.play(item) {
-        if let Some(ui) = ui() {
-            nyx_ui::toast::show(&ui.overlay, "YouTube Music has nothing to play for this");
-        }
+    if !p.play(item)
+        && let Some(ui) = ui()
+    {
+        nyx_ui::toast::show(&ui.overlay, "YouTube Music has nothing to play for this");
     }
 }
 
@@ -494,7 +500,9 @@ fn install_keys(window: &gtk::ApplicationWindow) {
     keys.connect_key_pressed(|_, key, _, mods| {
         let ctrl = mods.contains(gdk::ModifierType::CONTROL_MASK);
         let alt = mods.contains(gdk::ModifierType::ALT_MASK);
-        let typing = ui().is_some_and(|u| u.search.has_focus() || gtk::prelude::GtkWindowExt::focus(&u.window).is_some_and(|f| f.is::<gtk::Text>()));
+        let typing = ui().is_some_and(|u| {
+            u.search.has_focus() || gtk::prelude::GtkWindowExt::focus(&u.window).is_some_and(|f| f.is::<gtk::Text>())
+        });
         let send = |c: Command| {
             if let Some(p) = player() {
                 p.send(c);

@@ -30,7 +30,9 @@ pub fn start(player: &Rc<Player>, app: &gtk::Application) {
         let v = match e {
             Event::State(p) => json!({ "event": "state", "state": p }),
             Event::Confirmed { id, command } => json!({ "event": "confirmed", "id": id, "command": command }),
-            Event::Failed { id, command, failure } => json!({ "event": "failed", "id": id, "command": command, "failure": failure }),
+            Event::Failed { id, command, failure } => {
+                json!({ "event": "failed", "id": id, "command": command, "failure": failure })
+            }
         };
         out(v, start);
     });
@@ -145,6 +147,9 @@ fn handle(player: &Rc<Player>, app: &gtk::Application, line: &str, start: Instan
             let id = player.send(cmd.clone());
             out(json!({ "event": "sent", "id": id, "command": cmd }), start)
         }
-        None => out(json!({ "event": "error", "error": "unknown command", "line": line.chars().take(200).collect::<String>() }), start),
+        None => out(
+            json!({ "event": "error", "error": "unknown command", "line": line.chars().take(200).collect::<String>() }),
+            start,
+        ),
     }
 }

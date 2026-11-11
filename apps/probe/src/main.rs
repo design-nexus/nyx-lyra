@@ -273,10 +273,10 @@ fn command(app: &gtk::Application, window: &gtk::ApplicationWindow, view: &webki
                     Ok(v) => serde_json::from_str::<Value>(&v.to_str()).unwrap_or(Value::Null),
                     Err(e) => json!({ "error": e.message() }),
                 };
-                if let Some(text) = v.as_object_mut().and_then(|o| o.remove("text")) {
-                    if let (Some(dir), Some(t)) = (std::env::var_os("LYRA_PROBE_DUMP"), text.as_str()) {
-                        let _ = std::fs::write(PathBuf::from(dir).join(format!("data-{id}.json")), t);
-                    }
+                if let Some(text) = v.as_object_mut().and_then(|o| o.remove("text"))
+                    && let (Some(dir), Some(t)) = (std::env::var_os("LYRA_PROBE_DUMP"), text.as_str())
+                {
+                    let _ = std::fs::write(PathBuf::from(dir).join(format!("data-{id}.json")), t);
                 }
                 emit(json!({ "event": "ack", "id": id, "cmd": "data", "result": v }))
             });

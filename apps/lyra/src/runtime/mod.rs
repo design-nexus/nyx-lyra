@@ -13,9 +13,15 @@ use serde_json::Value;
 pub enum Load {
     Home,
     /// A song, optionally in a playlist or album's list, optionally from a position (seconds).
-    Watch { video_id: String, playlist_id: Option<String>, at: Option<u32> },
+    Watch {
+        video_id: String,
+        playlist_id: Option<String>,
+        at: Option<u32>,
+    },
     /// A playlist or album's list from its start.
-    List { playlist_id: String },
+    List {
+        playlist_id: String,
+    },
     /// Google's sign-in page for YouTube Music (where its own Sign in button leads).
     SignIn,
 }
@@ -24,13 +30,15 @@ pub enum Load {
 pub enum Event {
     /// The bridge started in a new page.
     Hello,
-    State(bridge::State),
+    State(Box<bridge::State>),
     /// The bridge's immediate answer to a command.
     Answer(CommandId, String),
     /// A page message that failed the checks (counted, never acted on).
     Rejected(bridge::Rejected),
     /// The web process ended; `again` says whether the runtime is reloading the page.
-    Ended { again: bool },
+    Ended {
+        again: bool,
+    },
     /// A page failed to load (offline, DNS).
     LoadFailed(String),
 }

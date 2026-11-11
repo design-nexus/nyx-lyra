@@ -125,10 +125,16 @@ impl Coordinator {
         &self.state
     }
 
+    /// The ID the next [`Coordinator::send`] will use.
+    pub fn next_id(&self) -> CommandId {
+        self.next + 1
+    }
+
     pub fn send(&mut self, command: Command, now: Instant) -> Send {
         self.next += 1;
         let id = self.next;
-        let failure = if self.state.connection != Connection::Ready { Err(Failure::Disconnected) } else { command.check(&self.state) };
+        let failure =
+            if self.state.connection != Connection::Ready { Err(Failure::Disconnected) } else { command.check(&self.state) };
         if let Err(failure) = failure {
             return Send::Failed(Event::Failed { id, command, failure });
         }
@@ -154,7 +160,8 @@ impl Coordinator {
     pub fn report(&mut self, s: &bridge::State) -> Vec<Event> {
         let next = Playback::from_bridge(s, self.state.connection);
         let mut events = Vec::new();
-        let (done, waiting): (Vec<_>, Vec<_>) = std::mem::take(&mut self.pending).into_iter().partition(|p| p.command.done(&p.before, &next));
+        let (done, waiting): (Vec<_>, Vec<_>) =
+            std::mem::take(&mut self.pending).into_iter().partition(|p| p.command.done(&p.before, &next));
         self.pending = waiting;
         if next != self.state {
             self.state = next;
@@ -178,11 +185,11 @@ impl Coordinator {
         }
         let mut events = Vec::new();
         if c != Connection::Ready {
-            events.extend(
-                std::mem::take(&mut self.pending)
-                    .into_iter()
-                    .map(|p| Event::Failed { id: p.id, command: p.command, failure: Failure::Disconnected }),
-            );
+            events.extend(std::mem::take(&mut self.pending).into_iter().map(|p| Event::Failed {
+                id: p.id,
+                command: p.command,
+                failure: Failure::Disconnected,
+            }));
         }
         self.state.connection = c;
         events.insert(0, Event::State(self.state.clone()));
@@ -257,10 +264,19 @@ mod tests {
     fn failures() {
         let (mut c, t) = ready();
         let id = wire(c.send(Command::Seek { position: 100.0 }, t));
-        assert_eq!(c.tick(t + Duration::from_secs(6)), vec![Event::Failed { id, command: Command::Seek { position: 100.0 }, failure: Failure::TimedOut }]);
+        assert_eq!(
+            c.tick(t + Duration::from_secs(6)),
+            vec![Event::Failed { id, command: Command::Seek { position: 100.0 }, failure: Failure::TimedOut }]
+        );
         let id = wire(c.send(Command::Next, t));
-        assert_eq!(c.answered(id, "unsupported"), Some(Event::Failed { id, command: Command::Next, failure: Failure::Unsupported }));
-        assert!(matches!(c.send(Command::Volume { level: 120 }, t), Send::Failed(Event::Failed { failure: Failure::BadArgument, .. })));
+        assert_eq!(
+            c.answered(id, "unsupported"),
+            Some(Event::Failed { id, command: Command::Next, failure: Failure::Unsupported })
+        );
+        assert!(matches!(
+            c.send(Command::Volume { level: 120 }, t),
+            Send::Failed(Event::Failed { failure: Failure::BadArgument, .. })
+        ));
         let id = wire(c.send(Command::Play, t));
         let events = c.connection(Connection::Reconnecting);
         assert!(events.contains(&Event::Failed { id, command: Command::Play, failure: Failure::Disconnected }));

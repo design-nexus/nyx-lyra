@@ -43,7 +43,7 @@ pub struct State {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Message {
     Hello { path: String },
-    State(State),
+    State(Box<State>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -63,7 +63,7 @@ pub fn parse(raw: &str) -> Result<Message, Rejected> {
         Some("state") => {
             let mut s: State = serde_json::from_value(v).map_err(|_| Rejected::NotJson)?;
             clean(&mut s);
-            Ok(Message::State(s))
+            Ok(Message::State(Box::new(s)))
         }
         _ => Err(Rejected::UnknownKind),
     }

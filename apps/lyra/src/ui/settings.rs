@@ -6,7 +6,8 @@ use gtk::prelude::*;
 use nyx_ui::settings_card::{self, About, Spec, Standard};
 use nyx_ui::widgets;
 
-const GROUPS: &[(&str, &str, &str)] = &[("Playback", "media-playback-start-symbolic", "Keep playing, the column, the mini-player")];
+const GROUPS: &[(&str, &str, &str)] =
+    &[("Playback", "media-playback-start-symbolic", "Keep playing, the column, the mini-player")];
 
 const SPEC: Spec = Spec {
     groups: GROUPS,
@@ -53,12 +54,17 @@ pub fn open() {
             .0,
         );
         list.append(
-            &widgets::switch_row("Show the now-playing column", "The cover and what plays next beside the pages, on wide windows.", p.show_column, |on| {
-                prefs::update(|p| p.show_column = on);
-                if let Some(ui) = ui() {
-                    ui.fit_column();
-                }
-            })
+            &widgets::switch_row(
+                "Show the now-playing column",
+                "The cover and what plays next beside the pages, on wide windows.",
+                p.show_column,
+                |on| {
+                    prefs::update(|p| p.show_column = on);
+                    if let Some(ui) = ui() {
+                        ui.fit_column();
+                    }
+                },
+            )
             .0,
         );
         group.append(&list);

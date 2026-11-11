@@ -68,6 +68,26 @@ pub fn availability(c: Capability, now: &Playback) -> Availability {
 }
 
 pub const ALL: &[Capability] = &[
-    Play, Seek, Next, Previous, Volume, Metadata, Album, Shuffle, Repeat, Like, Queue, Lyrics, Search, Home, Explore, Library,
-    LikedMusic, Playlists, Artists, Albums, EditPlaylists, SignedOutPlayback,
+    Play,
+    Seek,
+    Next,
+    Previous,
+    Volume,
+    Metadata,
+    Album,
+    Shuffle,
+    Repeat,
+    Like,
+    Queue,
+    Lyrics,
+    Search,
+    Home,
+    Explore,
+    Library,
+    LikedMusic,
+    Playlists,
+    Artists,
+    Albums,
+    EditPlaylists,
+    SignedOutPlayback,
 ];

@@ -16,7 +16,14 @@ use webkit6::prelude::*;
 
 pub const HOME: &str = "https://music.youtube.com/";
 /// Pages that may load in the view: YouTube Music, and the hosts Google's sign-in passes through.
-const HOSTS: &[&str] = &["music.youtube.com", "www.youtube.com", "accounts.youtube.com", "consent.youtube.com", "accounts.google.com", "gds.google.com"];
+const HOSTS: &[&str] = &[
+    "music.youtube.com",
+    "www.youtube.com",
+    "accounts.youtube.com",
+    "consent.youtube.com",
+    "accounts.google.com",
+    "gds.google.com",
+];
 const MAX_ENDS: usize = 3;
 const SIGN_IN: &str = "https://accounts.google.com/ServiceLogin?ltmpl=music&service=youtube&passive=true&continue=https%3A%2F%2Fwww.youtube.com%2Fsignin%3Faction_handle_signin%3Dtrue%26app%3Ddesktop%26next%3Dhttps%253A%252F%252Fmusic.youtube.com%252F";
 
@@ -39,7 +46,8 @@ impl WebRuntime {
         }
         let session = webkit6::NetworkSession::new(data.to_str(), cache.to_str());
         if let Some(cookies) = session.cookie_manager() {
-            cookies.set_persistent_storage(&data.join("cookies.sqlite").to_string_lossy(), webkit6::CookiePersistentStorage::Sqlite);
+            cookies
+                .set_persistent_storage(&data.join("cookies.sqlite").to_string_lossy(), webkit6::CookiePersistentStorage::Sqlite);
         }
 
         let settings = webkit6::Settings::new();
@@ -105,7 +113,8 @@ impl WebRuntime {
         let ev = on_event.clone();
         view.connect_load_failed(move |_, _, uri, error| {
             // A load replaced by another (Lyra loading a song while Home loads) isn't a failure.
-            let replaced = error.matches(webkit6::NetworkError::Cancelled) || error.matches(webkit6::PolicyError::FrameLoadInterruptedByPolicyChange);
+            let replaced = error.matches(webkit6::NetworkError::Cancelled)
+                || error.matches(webkit6::PolicyError::FrameLoadInterruptedByPolicyChange);
             if allowed(uri) && !replaced {
                 ev(Event::LoadFailed(error.message().to_string()));
             }
@@ -130,7 +139,10 @@ impl Runtime for WebRuntime {
         let ev = self.on_event.clone();
         self.view.evaluate_javascript(&script, None, None, gio::Cancellable::NONE, move |r| {
             let answer = match r {
-                Ok(v) => serde_json::from_str::<Value>(&v.to_str()).ok().and_then(|v| v.as_str().map(String::from)).unwrap_or_else(|| "refused".into()),
+                Ok(v) => serde_json::from_str::<Value>(&v.to_str())
+                    .ok()
+                    .and_then(|v| v.as_str().map(String::from))
+                    .unwrap_or_else(|| "refused".into()),
                 Err(_) => "no-bridge".into(),
             };
             ev(Event::Answer(id, answer))
@@ -138,11 +150,15 @@ impl Runtime for WebRuntime {
     }
 
     fn request(&self, request: &Request, reply: Reply) {
-        let body = format!("return window.__lyraData ? await window.__lyraData({}) : JSON.stringify({{ error: 'no-bridge' }});", request.wire());
+        let body = format!(
+            "return window.__lyraData ? await window.__lyraData({}) : JSON.stringify({{ error: 'no-bridge' }});",
+            request.wire()
+        );
         self.view.call_async_javascript_function(&body, None, None, None, gio::Cancellable::NONE, move |r| {
             let out: Result<Value, RequestError> = (|| {
                 let v = r.map_err(|e| RequestError::Failed(e.message().to_string()))?;
-                let v: Value = serde_json::from_str(&v.to_str()).map_err(|_| RequestError::Failed("an unreadable answer".into()))?;
+                let v: Value =
+                    serde_json::from_str(&v.to_str()).map_err(|_| RequestError::Failed("an unreadable answer".into()))?;
                 match v.get("error").and_then(Value::as_str) {
                     Some("no-bridge" | "no-client-context") => return Err(RequestError::NotReady),
                     Some(e) => return Err(RequestError::Failed(e.chars().take(64).collect())),

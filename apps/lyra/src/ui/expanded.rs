@@ -123,11 +123,15 @@ impl Expanded {
             next_ids: RefCell::default(),
         });
         let weak = Rc::downgrade(&me);
-        let seg = widgets::segmented(&widgets::opts(&[("queue", "Up next"), ("lyrics", "Lyrics"), ("related", "Related")]), "queue", move |v| {
-            if let Some(m) = weak.upgrade() {
-                m.show_tab(&v);
-            }
-        });
+        let seg = widgets::segmented(
+            &widgets::opts(&[("queue", "Up next"), ("lyrics", "Lyrics"), ("related", "Related")]),
+            "queue",
+            move |v| {
+                if let Some(m) = weak.upgrade() {
+                    m.show_tab(&v);
+                }
+            },
+        );
         seg.set_halign(gtk::Align::Start);
         seg.set_widget_name("tabs");
         right.append(&seg);
@@ -188,10 +192,11 @@ impl Expanded {
         fill_queue(&self.queue, next, 40);
         *self.next_ids.borrow_mut() = (next.and_then(|n| n.lyrics.clone()), next.and_then(|n| n.related.clone()));
         // A tab that's showing follows the new song.
-        if let Some(name) = self.tabs.visible_child_name() {
-            if name != "queue" && self.root.is_mapped() {
-                self.show_tab(&name);
-            }
+        if let Some(name) = self.tabs.visible_child_name()
+            && name != "queue"
+            && self.root.is_mapped()
+        {
+            self.show_tab(&name);
         }
     }
 

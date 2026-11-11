@@ -13,6 +13,14 @@
   // The page's own Media Session handlers are what its media keys would call.
   const handlers = new Map();
   const ms = navigator.mediaSession;
+  // The song's details stay here for Lyra: WebKit publishes its own media player (MPRIS)
+  // once the Media Session has a title, which would show Lyra twice; Lyra has its own.
+  let metadata = null;
+  if (ms && "metadata" in ms) {
+    try {
+      Object.defineProperty(ms, "metadata", { configurable: true, get: () => metadata, set: (m) => (metadata = m) });
+    } catch (_) {}
+  }
   if (ms && typeof ms.setActionHandler === "function") {
     const set = ms.setActionHandler.bind(ms);
     ms.setActionHandler = function (action, fn) {

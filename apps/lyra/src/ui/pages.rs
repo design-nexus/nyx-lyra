@@ -39,15 +39,16 @@ fn cache_key(route: &Route) -> String {
 pub fn open(route: &Route) -> gtk::Widget {
     let body = gtk::Box::new(gtk::Orientation::Vertical, 0);
     body.add_css_class("page-body");
-    let scroll = gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).hexpand(true).child(&body).build();
+    let scroll =
+        gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).hexpand(true).child(&body).build();
     if let Route::Library(tab) = route {
         body.append(&library_tabs(*tab));
     }
-    if let Route::Search(q) = route {
-        if q.is_empty() {
-            recent_searches(&body);
-            return scroll.upcast();
-        }
+    if let Route::Search(q) = route
+        && q.is_empty()
+    {
+        recent_searches(&body);
+        return scroll.upcast();
     }
     let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
     body.append(&content);
@@ -63,26 +64,24 @@ pub fn open(route: &Route) -> gtk::Widget {
     };
     let route = route.clone();
     let had = cached.is_some();
-    fetch(&req, move |r| {
-        match r {
-            Ok(page) => {
-                cache::put(&key, &page);
-                clear(&content);
-                render(&content, &page, &route);
-            }
-            Err(why) if !had => {
-                clear(&content);
-                let retry = route.clone();
-                let state = widgets::empty_state(
-                    "network-offline-symbolic",
-                    "YouTube Music didn't answer",
-                    &why,
-                    Some(("Try again", Box::new(move || navigate(retry.clone())))),
-                );
-                content.append(&state);
-            }
-            Err(why) => eprintln!("nyx-lyra: kept the cached page: {why}"),
+    fetch(&req, move |r| match r {
+        Ok(page) => {
+            cache::put(&key, &page);
+            clear(&content);
+            render(&content, &page, &route);
         }
+        Err(why) if !had => {
+            clear(&content);
+            let retry = route.clone();
+            let state = widgets::empty_state(
+                "network-offline-symbolic",
+                "YouTube Music didn't answer",
+                &why,
+                Some(("Try again", Box::new(move || navigate(retry.clone())))),
+            );
+            content.append(&state);
+        }
+        Err(why) => eprintln!("nyx-lyra: kept the cached page: {why}"),
     });
     scroll.upcast()
 }
@@ -137,9 +136,18 @@ fn render(b: &gtk::Box, page: &Page, route: &Route) {
         if shelf.title == "Top result" {
             b.append(&top_result(&items));
         } else if songs && detail {
-            b.append(&track_list(&items, page.header.as_ref().is_some_and(|h| h.subtitle.starts_with("Album") || h.subtitle.starts_with("Single") || h.subtitle.starts_with("EP"))));
+            b.append(&track_list(
+                &items,
+                page.header.as_ref().is_some_and(|h| {
+                    h.subtitle.starts_with("Album") || h.subtitle.starts_with("Single") || h.subtitle.starts_with("EP")
+                }),
+            ));
         } else if songs || shelf.title == youtube::RESULTS {
-            b.append(&song_grid(&items, if browsing { 12 } else { usize::MAX }, if shelf.title == youtube::RESULTS { 1 } else { 3 }));
+            b.append(&song_grid(
+                &items,
+                if browsing { 12 } else { usize::MAX },
+                if shelf.title == youtube::RESULTS { 1 } else { 3 },
+            ));
         } else {
             b.append(&tile_grid(&items, if browsing { 12 } else { usize::MAX }));
         }
@@ -252,7 +260,8 @@ fn shelf_head(s: &Shelf) -> gtk::Widget {
 /* ── Tiles, songs, track lists ─────────────────────────────────────────────────── */
 
 fn thumb(item: &Item, size: i32) -> Artwork {
-    let art = Artwork::new(size, size, if item.kind == Kind::Artist { "avatar-default-symbolic" } else { "folder-music-symbolic" });
+    let art =
+        Artwork::new(size, size, if item.kind == Kind::Artist { "avatar-default-symbolic" } else { "folder-music-symbolic" });
     if item.kind == Kind::Artist {
         art.root.add_css_class("round");
     }
@@ -445,7 +454,12 @@ fn library_tabs(current: Tab) -> gtk::Widget {
 fn recent_searches(b: &gtk::Box) {
     let recent = prefs::get().recent_searches;
     if recent.is_empty() {
-        b.append(&widgets::empty_state("system-search-symbolic", "Search YouTube Music", "Songs, albums, artists and playlists. Ctrl+F from anywhere.", None));
+        b.append(&widgets::empty_state(
+            "system-search-symbolic",
+            "Search YouTube Music",
+            "Songs, albums, artists and playlists. Ctrl+F from anywhere.",
+            None,
+        ));
         return;
     }
     b.append(&left("Recent searches", "shelf-title"));

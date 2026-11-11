@@ -68,6 +68,12 @@ pub fn more(token: &str) -> Option<Request> {
     ok.then(|| Request { endpoint: Endpoint::Browse, body: json!({ "continuation": token }) })
 }
 
+/// A playlist's or album's queue from its start, to find its first song.
+pub fn list_start(playlist_id: &str) -> Option<Request> {
+    valid_id(playlist_id)
+        .then(|| Request { endpoint: Endpoint::Next, body: json!({ "playlistId": playlist_id, "isAudioOnly": true }) })
+}
+
 /// What plays after a song: its queue, and the IDs of its lyrics and related pages.
 pub fn up_next(video_id: &str, playlist_id: Option<&str>) -> Option<Request> {
     if !valid_id(video_id) || playlist_id.is_some_and(|p| !valid_id(p)) {

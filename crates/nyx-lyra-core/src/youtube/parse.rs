@@ -65,7 +65,10 @@ fn text(v: Option<&Value>) -> String {
     if let Some(s) = v.get("simpleText").and_then(Value::as_str) {
         return s.to_string();
     }
-    v.get("runs").and_then(Value::as_array).map(|r| r.iter().filter_map(|x| x.get("text").and_then(Value::as_str)).collect()).unwrap_or_default()
+    v.get("runs")
+        .and_then(Value::as_array)
+        .map(|r| r.iter().filter_map(|x| x.get("text").and_then(Value::as_str)).collect())
+        .unwrap_or_default()
 }
 
 fn runs(v: Option<&Value>) -> &[Value] {
@@ -106,7 +109,10 @@ fn page_type(endpoint: &Value) -> Option<&str> {
 /// A watch endpoint's music type; one without (a plain YouTube video) counts as a video.
 fn video_type(endpoint: &Value) -> Option<&str> {
     let w = endpoint.get("watchEndpoint")?;
-    Some(str_at(w, "/watchEndpointMusicSupportedConfigs/watchEndpointMusicConfig/musicVideoType").unwrap_or("MUSIC_VIDEO_TYPE_OMV"))
+    Some(
+        str_at(w, "/watchEndpointMusicSupportedConfigs/watchEndpointMusicConfig/musicVideoType")
+            .unwrap_or("MUSIC_VIDEO_TYPE_OMV"),
+    )
 }
 
 fn kind_of(page: Option<&str>, video: Option<&str>, first_label: &str) -> Kind {
@@ -149,7 +155,9 @@ fn people(rs: &[Value]) -> (Vec<Link>, Option<Link>) {
         let Some(ep) = r.get("navigationEndpoint") else { continue };
         let id = str_at(ep, "/browseEndpoint/browseId").map(String::from);
         match page_type(ep) {
-            Some("MUSIC_PAGE_TYPE_ARTIST" | "MUSIC_PAGE_TYPE_USER_CHANNEL") => artists.push(Link { name: name.into(), browse_id: id }),
+            Some("MUSIC_PAGE_TYPE_ARTIST" | "MUSIC_PAGE_TYPE_USER_CHANNEL") => {
+                artists.push(Link { name: name.into(), browse_id: id })
+            }
             Some("MUSIC_PAGE_TYPE_ALBUM") => album = Some(Link { name: name.into(), browse_id: id }),
             _ => {}
         }
@@ -233,7 +241,10 @@ fn list_item(r: &Value) -> Option<Item> {
         duration,
         video_id,
         playlist_id,
-        browse_id: row_ep.and_then(|e| str_at(e, "/browseEndpoint/browseId")).or_else(|| title_ep.and_then(|e| str_at(e, "/browseEndpoint/browseId"))).map(String::from),
+        browse_id: row_ep
+            .and_then(|e| str_at(e, "/browseEndpoint/browseId"))
+            .or_else(|| title_ep.and_then(|e| str_at(e, "/browseEndpoint/browseId")))
+            .map(String::from),
         thumbnails: thumbnails(r.get("thumbnail")),
         explicit: explicit(r),
     })
@@ -325,7 +336,9 @@ fn collect_shelves(v: &Value, out: &mut Vec<Shelf>) {
                             title: text(h.and_then(|h| h.get("title"))),
                             items: rows(r.get("contents")),
                             more: more(h.and_then(|h| h.pointer("/moreContentButton/buttonRenderer/navigationEndpoint")))
-                                .or_else(|| more(h.and_then(|h| runs(h.get("title")).first()).and_then(|x| x.get("navigationEndpoint")))),
+                                .or_else(|| {
+                                    more(h.and_then(|h| runs(h.get("title")).first()).and_then(|x| x.get("navigationEndpoint")))
+                                }),
                         });
                     }
                     "musicShelfRenderer" | "musicPlaylistShelfRenderer" => out.push(Shelf {
@@ -340,7 +353,9 @@ fn collect_shelves(v: &Value, out: &mut Vec<Shelf>) {
                         out.push(Shelf { title: if title.is_empty() { "Top result".into() } else { title }, items, more: None });
                     }
                     // The next part of a long list.
-                    "appendContinuationItemsAction" => out.push(Shelf { title: String::new(), items: rows(r.get("continuationItems")), more: None }),
+                    "appendContinuationItemsAction" => {
+                        out.push(Shelf { title: String::new(), items: rows(r.get("continuationItems")), more: None })
+                    }
                     "musicShelfContinuation" | "musicPlaylistShelfContinuation" => {
                         out.push(Shelf { title: String::new(), items: rows(r.get("contents")), more: None })
                     }
@@ -376,7 +391,12 @@ fn description(r: &Value) -> String {
 }
 
 fn find_header(v: &Value) -> Option<Header> {
-    for key in ["musicResponsiveHeaderRenderer", "musicImmersiveHeaderRenderer", "musicDetailHeaderRenderer", "musicVisualHeaderRenderer"] {
+    for key in [
+        "musicResponsiveHeaderRenderer",
+        "musicImmersiveHeaderRenderer",
+        "musicDetailHeaderRenderer",
+        "musicVisualHeaderRenderer",
+    ] {
         if let Some(r) = find(v, key) {
             let title = text(r.get("title"));
             if title.is_empty() {
@@ -428,9 +448,8 @@ pub fn next(v: &Value) -> Result<Next, ParseError> {
         .pointer("/contents/singleColumnMusicWatchNextResultsRenderer/tabbedRenderer/watchNextTabbedResultsRenderer/tabs")
         .and_then(Value::as_array)
         .ok_or(ParseError::Unrecognized)?;
-    let tab_id = |i: usize| {
-        tabs.get(i).and_then(|t| str_at(t, "/tabRenderer/endpoint/browseEndpoint/browseId")).map(String::from)
-    };
+    let tab_id =
+        |i: usize| tabs.get(i).and_then(|t| str_at(t, "/tabRenderer/endpoint/browseEndpoint/browseId")).map(String::from);
     let mut out = Next { lyrics: tab_id(1), related: tab_id(2).or_else(|| tab_id(3)), ..Default::default() };
     let mut panel = Vec::new();
     collect_panel(tabs.first().ok_or(ParseError::Unrecognized)?, &mut panel);
@@ -491,7 +510,11 @@ pub fn lyrics(v: &Value) -> Result<Option<Lyrics>, ParseError> {
     }
     let Some(r) = find(v, "musicDescriptionShelfRenderer") else {
         // A page with only a message ("Lyrics not available") has no shelf.
-        return if find(v, "messageRenderer").is_some() || find(v, "sectionListRenderer").is_some() { Ok(None) } else { Err(ParseError::Unrecognized) };
+        return if find(v, "messageRenderer").is_some() || find(v, "sectionListRenderer").is_some() {
+            Ok(None)
+        } else {
+            Err(ParseError::Unrecognized)
+        };
     };
     let body = text(r.get("description"));
     Ok((!body.is_empty()).then(|| Lyrics { text: body, source: text(r.get("footer")) }))

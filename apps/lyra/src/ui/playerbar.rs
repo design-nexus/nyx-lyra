@@ -144,7 +144,14 @@ impl Bar {
         mini.connect_clicked(|_| super::mini::toggle());
         let expand = widgets::icon_button("view-fullscreen-symbolic", "Now playing (F)");
         expand.connect_clicked(|_| open_now("queue"));
-        for w in [lyrics.upcast_ref::<gtk::Widget>(), queue.upcast_ref(), mute.upcast_ref(), volume.upcast_ref(), mini.upcast_ref(), expand.upcast_ref()] {
+        for w in [
+            lyrics.upcast_ref::<gtk::Widget>(),
+            queue.upcast_ref(),
+            mute.upcast_ref(),
+            volume.upcast_ref(),
+            mini.upcast_ref(),
+            expand.upcast_ref(),
+        ] {
             right.append(w);
         }
         root.append(&right);

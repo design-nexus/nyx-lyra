@@ -2,7 +2,9 @@
 
 mod art;
 mod cache;
+mod control;
 mod dev;
+mod mpris;
 mod player;
 mod prefs;
 mod runtime;
@@ -28,7 +30,10 @@ pub fn player() -> Option<Rc<Player>> {
 
 /// Lyra's own symbolic icons, written to the cache once and added to the icon search path.
 fn install_icons() {
-    const ICONS: &[(&str, &str)] = &[("io.github.design_nexus.nyx.Lyra-symbolic.svg", include_str!("../data/icons/io.github.design_nexus.nyx.Lyra-symbolic.svg"))];
+    const ICONS: &[(&str, &str)] = &[(
+        "io.github.design_nexus.nyx.Lyra-symbolic.svg",
+        include_str!("../data/icons/io.github.design_nexus.nyx.Lyra-symbolic.svg"),
+    )];
     let dir = nyx_core::paths::cache_dir().join("icons");
     let _ = std::fs::create_dir_all(&dir);
     for (name, svg) in ICONS {
@@ -50,11 +55,15 @@ fn start(app: &gtk::Application) {
     let web = nyx_core::paths::data_dir().join("web");
     let cache = nyx_core::paths::cache_dir().join("web");
     let p = Rc::downgrade(&player);
-    let rt = WebRuntime::new(&web, &cache, Rc::new(move |e| {
-        if let Some(p) = p.upgrade() {
-            p.on_runtime(e)
-        }
-    }));
+    let rt = WebRuntime::new(
+        &web,
+        &cache,
+        Rc::new(move |e| {
+            if let Some(p) = p.upgrade() {
+                p.on_runtime(e)
+            }
+        }),
+    );
     if std::env::var("NYX_LYRA_MUTE").as_deref() == Ok("1") {
         runtime::Runtime::set_muted(&*rt, true);
     }
@@ -64,6 +73,9 @@ fn start(app: &gtk::Application) {
     if dev::enabled() {
         dev::start(&player, app);
     }
+    // The nyx command, Glimpse and Nyx Assistant; media keys, the bar, Control Center, the dock.
+    control::serve(app);
+    mpris::start(app);
 }
 
 /// The window. Closing it while music plays hides it (unless that's turned off); the music
@@ -97,15 +109,26 @@ fn present(app: &gtk::Application) {
 fn main() -> glib::ExitCode {
     nyx_core::app::init(nyx_core::app::App { slug: "nyx-lyra", name: "Lyra" });
     let id = std::env::var("NYX_LYRA_APP_ID").unwrap_or_else(|_| APP_ID.to_string());
+    nyx_core::control::describe_if_asked(&control::description(&id));
     // GTK's Vulkan renderer wakes a sleeping discrete GPU on hybrid laptops; GL doesn't.
     if std::env::var_os("GSK_RENDERER").is_none() {
         // SAFETY: still single-threaded; nothing else reads the environment yet.
         unsafe { std::env::set_var("GSK_RENDERER", "ngl") };
     }
     glib::set_application_name("Lyra");
-    let flags = if dev::enabled() { gio::ApplicationFlags::NON_UNIQUE } else { gio::ApplicationFlags::empty() };
+    // Started by D-Bus for an action (the nyx command, Glimpse): no window until one's needed.
+    let service = std::env::args().any(|a| a == "--gapplication-service");
+    let mut flags = gio::ApplicationFlags::empty();
+    if service {
+        flags |= gio::ApplicationFlags::IS_SERVICE;
+    }
     let app = gtk::Application::builder().application_id(&id).flags(flags).build();
-    app.connect_startup(start);
+    app.connect_startup(move |app| {
+        start(app);
+        if service {
+            app.set_inactivity_timeout(10_000);
+        }
+    });
     app.connect_activate(present);
     app.connect_shutdown(|_| prefs::flush());
     app.run_with_args(&["nyx-lyra"])

@@ -75,7 +75,10 @@ fn search_one_result_per_section() {
     let reply = json!({ "contents": { "sectionListRenderer": { "contents": [
         { "musicCardShelfRenderer": { "title": { "runs": [ { "text": "Daft Punk" } ] } } }, section(), section(), section() ] } } });
     let p = page(&reply).unwrap();
-    assert_eq!(p.shelves.iter().map(|s| (s.title.as_str(), s.items.len())).collect::<Vec<_>>(), [("Top result", 1), (RESULTS, 3)]);
+    assert_eq!(
+        p.shelves.iter().map(|s| (s.title.as_str(), s.items.len())).collect::<Vec<_>>(),
+        [("Top result", 1), (RESULTS, 3)]
+    );
 }
 
 #[test]
@@ -132,7 +135,10 @@ fn continuations() {
 
 #[test]
 fn errors() {
-    assert_eq!(page(&json!({ "error": { "code": 401, "message": "Unauthorized" } })), Err(ParseError::Server { code: 401, message: "Unauthorized".into() }));
+    assert_eq!(
+        page(&json!({ "error": { "code": 401, "message": "Unauthorized" } })),
+        Err(ParseError::Server { code: 401, message: "Unauthorized".into() })
+    );
     assert_eq!(page(&json!({ "contents": { "somethingElse": [] } })), Err(ParseError::Unrecognized));
     let signed_out = json!({ "responseContext": { "serviceTrackingParams": [ { "service": "GFEEDBACK", "params": [ { "key": "logged_in", "value": "0" } ] } ] } });
     assert_eq!(logged_in(&signed_out), Some(false));
@@ -158,7 +164,10 @@ fn up_next_and_lyrics() {
     let l = json!({ "contents": { "sectionListRenderer": { "contents": [ { "musicDescriptionShelfRenderer": {
         "description": { "runs": [ { "text": "line one\nline two" } ] }, "footer": { "runs": [ { "text": "Source: LyricFind" } ] } } } ] } } });
     assert_eq!(lyrics(&l).unwrap().unwrap().source, "Source: LyricFind");
-    assert_eq!(lyrics(&json!({ "contents": { "sectionListRenderer": { "contents": [ { "messageRenderer": {} } ] } } })), Ok(None));
+    assert_eq!(
+        lyrics(&json!({ "contents": { "sectionListRenderer": { "contents": [ { "messageRenderer": {} } ] } } })),
+        Ok(None)
+    );
 }
 
 /// Real replies saved by the probe (`data-N.json` in `LYRA_DUMPS`); run with

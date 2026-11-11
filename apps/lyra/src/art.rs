@@ -30,7 +30,6 @@ fn allowed(url: &str) -> bool {
 }
 
 /// The cached file for `url`, when it has been fetched (MPRIS and notifications want files).
-#[allow(dead_code)] // MPRIS and notifications (Phase 5)
 pub fn file(url: &str) -> Option<PathBuf> {
     let p = path(url);
     p.exists().then_some(p)
@@ -65,7 +64,8 @@ pub fn load(url: &str, done: impl Fn(&gdk::Texture) + 'static) {
     let task = gio::spawn_blocking(move || -> Option<Vec<u8>> {
         if let Ok(bytes) = std::fs::read(&target) {
             // Touch it so the eviction keeps what's in use.
-            let _ = std::fs::File::options().append(true).open(&target).and_then(|f| f.set_modified(std::time::SystemTime::now()));
+            let _ =
+                std::fs::File::options().append(true).open(&target).and_then(|f| f.set_modified(std::time::SystemTime::now()));
             return Some(bytes);
         }
         let mut body = ureq::get(&fetch).call().ok()?.into_body();

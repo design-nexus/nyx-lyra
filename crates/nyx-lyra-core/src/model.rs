@@ -49,7 +49,11 @@ pub struct Item {
 impl Item {
     /// The smallest thumbnail at least `size` pixels wide, else the largest.
     pub fn thumbnail(&self, size: u32) -> Option<&Thumbnail> {
-        self.thumbnails.iter().filter(|t| t.width >= size).min_by_key(|t| t.width).or_else(|| self.thumbnails.iter().max_by_key(|t| t.width))
+        self.thumbnails
+            .iter()
+            .filter(|t| t.width >= size)
+            .min_by_key(|t| t.width)
+            .or_else(|| self.thumbnails.iter().max_by_key(|t| t.width))
     }
 
     pub fn playable(&self) -> bool {
