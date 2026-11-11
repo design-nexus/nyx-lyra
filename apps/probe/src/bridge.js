@@ -119,5 +119,39 @@
     }
   };
   window.__lyraCommand = (c) => JSON.stringify(command(c));
+
+  // The web client's own data requests, made from this page the way it makes them: its
+  // context from ytcfg, and its signed-in header unless auth is false. Only these endpoints.
+  const ENDPOINTS = new Set(["search", "browse", "next"]);
+  const cfg = (k) => (window.ytcfg && window.ytcfg.get ? window.ytcfg.get(k) : undefined);
+  const cookie = (n) => (document.cookie.match(new RegExp("(?:^|; )" + n + "=([^;]*)")) || [])[1];
+  const sha1 = async (s) =>
+    [...new Uint8Array(await crypto.subtle.digest("SHA-1", new TextEncoder().encode(s)))].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const signedIn = async () => {
+    const sid = cookie("SAPISID") || cookie("__Secure-3PAPISID");
+    if (!sid) return null;
+    const t = Math.floor(Date.now() / 1000);
+    return `SAPISIDHASH ${t}_${await sha1(`${t} ${sid} ${location.origin}`)}`;
+  };
+  window.__lyraData = async (c) => {
+    if (!c || !ENDPOINTS.has(c.endpoint) || typeof c.body !== "object") return JSON.stringify({ error: "bad-request" });
+    const context = cfg("INNERTUBE_CONTEXT");
+    if (!context) return JSON.stringify({ error: "no-client-context" });
+    const headers = {
+      "Content-Type": "application/json",
+      "X-Goog-AuthUser": String(cfg("SESSION_INDEX") ?? 0),
+      "X-Origin": location.origin,
+      "X-Youtube-Client-Name": String(cfg("INNERTUBE_CONTEXT_CLIENT_NAME") ?? ""),
+      "X-Youtube-Client-Version": String(cfg("INNERTUBE_CLIENT_VERSION") ?? ""),
+    };
+    if (c.auth !== false) {
+      const a = await signedIn();
+      if (a) headers.Authorization = a;
+    }
+    const t0 = performance.now();
+    const r = await fetch(`/youtubei/v1/${c.endpoint}?prettyPrint=false`, { method: "POST", credentials: "include", headers, body: JSON.stringify({ context, ...c.body }) });
+    const text = await r.text();
+    return JSON.stringify({ status: r.status, ms: Math.round(performance.now() - t0), bytes: text.length, signed: !!headers.Authorization, text });
+  };
   post({ kind: "hello", path: location.pathname });
 })();

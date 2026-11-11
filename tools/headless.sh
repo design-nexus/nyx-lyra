@@ -22,7 +22,7 @@ hyprctl eval "hl.window_rule({ name = \"nyx-test-lyra\", match = { class = \"^io
 x=$(hyprctl monitors -j | python3 -c "import json,sys; print([m['x'] for m in json.load(sys.stdin) if m['name']=='$out'][0])")
 [[ $x == -20000 ]] || { echo "output $out isn't at -20000 ($x)"; exit 1; }
 XDG_CONFIG_HOME=$dir/xdg/config XDG_DATA_HOME=$dir/xdg/data XDG_CACHE_HOME=$dir/xdg/cache \
-  LYRA_PROBE_APP_ID=io.github.design_nexus.nyx.LyraProbeTest LYRA_PROBE_MUTE=1 \
+  LYRA_PROBE_APP_ID=io.github.design_nexus.nyx.LyraProbeTest LYRA_PROBE_MUTE=1 LYRA_PROBE_DUMP=$dir \
   setsid bash -c "tail -n +1 -f $dir/cmds | exec $bin ${1:-} >$dir/events.log 2>$dir/stderr.log" </dev/null >/dev/null 2>&1 &
 mon=$(hyprctl monitors -j | python3 -c "import json,sys; print([m['id'] for m in json.load(sys.stdin) if m['name']=='$out'][0])")
 for _ in $(seq 1 100); do
