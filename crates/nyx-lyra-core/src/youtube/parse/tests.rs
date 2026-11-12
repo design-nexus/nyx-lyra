@@ -217,9 +217,123 @@ fn real_replies() {
             p.header.as_ref().map(|h| &h.title),
             p.continuation.is_some()
         );
+        let links = p.items().filter(|i| i.kind == Kind::Link).count();
+        let ranked = p.items().filter(|i| i.rank.is_some()).count();
+        let liked = p.items().filter(|i| i.liked == Some(true)).count();
+        println!(
+            "    chips {}, sorts {} ({:?}), links {links}, ranked {ranked}, liked {liked}, artist {:?}, list {:?}",
+            p.chips.len(),
+            p.sorts.len(),
+            p.sorts.iter().find(|s| s.selected).map(|s| &s.title),
+            p.header.as_ref().and_then(|h| h.artist.as_ref()).map(|a| (a.shuffle.is_some(), a.radio.is_some(), a.subscribed)),
+            p.header.as_ref().and_then(|h| h.list.as_ref()).map(|l| (
+                l.play.is_some(),
+                l.shuffle.is_some(),
+                l.saved,
+                l.by.as_ref().map(|b| &b.name)
+            )),
+        );
+        for c in p.chips.iter().chain(&p.sorts) {
+            assert!(!c.title.is_empty() && c.params.as_deref().is_none_or(|t| !t.is_empty()), "{name}: {c:?}");
+        }
+        for i in p.items().filter(|i| i.kind == Kind::Link) {
+            assert!(i.browse_id.is_some(), "{name}: a link without a page: {i:?}");
+        }
         assert!(n > 0 || p.header.is_some());
         assert_eq!(untitled, 0);
         assert_eq!(unplayable, 0, "{name}: every item should play or open");
     }
     assert!(seen > 0);
+}
+
+#[test]
+fn the_active_channel_and_the_channels_to_switch_to() {
+    let menu = json!({ "actions": [ { "openPopupAction": { "popup": { "multiPageMenuRenderer": { "header": {
+        "activeAccountHeaderRenderer": {
+            "accountName": { "runs": [ { "text": "Music" } ] },
+            "channelHandle": { "runs": [ { "text": "@KenSmith-Music" } ] },
+            "accountPhoto": { "thumbnails": [ { "url": "https://yt3.ggpht.com/p=s108", "width": 108, "height": 108 } ] } } } } } } } ] });
+    let a = account(&menu).unwrap();
+    assert_eq!((a.name.as_str(), a.byline.as_str(), a.photo.len()), ("Music", "@KenSmith-Music", 1));
+    assert_eq!(account(&json!({})), None);
+
+    let item = |name: &str, url: &str, selected: bool| {
+        json!({ "accountItem": {
+        "accountName": { "runs": [ { "text": name } ] },
+        "accountByline": { "runs": [ { "text": "No subscribers" } ] },
+        "isSelected": selected,
+        "serviceEndpoint": { "selectActiveIdentityEndpoint": { "supportedTokens": [
+            { "pageIdToken": { "pageId": "1" } }, { "accountSigninToken": { "signinUrl": url } } ] } } } })
+    };
+    let list = json!({ "actions": [ { "getMultiPageMenuAction": { "menu": { "multiPageMenuRenderer": { "sections": [
+        { "accountSectionListRenderer": { "contents": [ { "accountItemSectionRenderer": { "contents": [
+            item("Music", "/signin?action_handle_signin=true&authuser=0&pageid=104&next=%2F", true),
+            item("Evil", "https://evil.example/signin?action_handle_signin=true&x", false),
+            item("Quote", "/signin?action_handle_signin=true&next=\"x\"", false) ] } } ] } } ] } } } } ] });
+    let c = channels(&list);
+    assert_eq!(c.len(), 3);
+    assert!(c[0].selected && c[0].switch.is_some());
+    assert_eq!(c[1].switch, None, "another site's address");
+    assert_eq!(c[2].switch, None, "characters a sign-in path doesn't have");
+}
+
+#[test]
+fn moods_sorts_and_tile_shelves() {
+    let chip = |t: &str, params: &str, selected: bool| {
+        json!({ "chipCloudChipRenderer": {
+        "text": { "runs": [ { "text": t } ] }, "isSelected": selected,
+        "navigationEndpoint": { "browseEndpoint": { "browseId": "FEmusic_home", "params": params } } } })
+    };
+    let sort = |t: &str, token: &str| {
+        json!({ "musicMultiSelectMenuItemRenderer": {
+        "title": { "runs": [ { "text": t } ] },
+        "selectedCommand": { "commandExecutorCommand": { "commands": [ { "musicCheckboxFormItemMutatedCommand": {} },
+            { "browseSectionListReloadEndpoint": { "continuation": { "reloadContinuationData": { "continuation": token } } } } ] } } } })
+    };
+    let v = json!({ "contents": { "sectionListRenderer": {
+        "header": { "chipCloudRenderer": { "chips": [ chip("Podcasts", "p0", false), chip("Relax", "p1", false), chip("Focus", "p2", true) ] },
+            "musicSideAlignedItemRenderer": { "endItems": [ { "musicSortFilterButtonRenderer": {
+                "accessibility": { "accessibilityData": { "label": "Sort by - A to Z selected, dropdown" } },
+                "menu": { "musicMultiSelectMenuRenderer": { "options": [ sort("Recently saved", "t1"), sort("A to Z", "t2") ] } } } } ] } },
+        "contents": [ { "musicCarouselShelfRenderer": {
+            "header": { "musicCarouselShelfBasicHeaderRenderer": { "title": { "runs": [ { "text": "Listen again" } ] } } },
+            "contents": [ album_tile() ] } },
+          { "musicCarouselShelfRenderer": {
+            "header": { "musicCarouselShelfBasicHeaderRenderer": { "title": { "runs": [ { "text": "Quick picks" } ] } } },
+            "contents": [ song_row() ] } } ] } } });
+    let p = page(&v).unwrap();
+    assert_eq!(p.chips.iter().map(|c| c.title.as_str()).collect::<Vec<_>>(), ["Relax", "Focus"], "no podcasts");
+    assert!(p.chips[1].selected && p.chips[1].params.as_deref() == Some("p2"));
+    assert_eq!(p.sorts.len(), 2);
+    assert!(!p.sorts[0].selected && p.sorts[1].selected);
+    assert_eq!(p.sorts[1].params.as_deref(), Some("t2"));
+    assert!(p.shelves[0].tiles && !p.shelves[1].tiles);
+}
+
+#[test]
+fn explore_buttons_moods_and_ranks() {
+    let button = |t: &str, id: &str, color: Option<u64>| {
+        let mut b = json!({ "musicNavigationButtonRenderer": { "buttonText": { "runs": [ { "text": t } ] },
+            "clickCommand": { "browseEndpoint": { "browseId": id, "params": "p1" } } } });
+        if let Some(c) = color {
+            b["musicNavigationButtonRenderer"]["solid"] = json!({ "leftStripeColor": c });
+        }
+        b
+    };
+    let mut ranked = song_row();
+    ranked["musicResponsiveListItemRenderer"]["customIndexColumn"] = json!({ "musicCustomIndexColumnRenderer": {
+        "text": { "runs": [ { "text": "1" } ] }, "icon": { "iconType": "ARROW_DROP_UP" } } });
+    let v = json!({ "contents": [
+        { "gridRenderer": { "items": [ button("New releases", "FEmusic_new_releases", None), button("Podcasts", "FEmusic_non_music_audio", None) ] } },
+        { "musicCarouselShelfRenderer": { "header": { "musicCarouselShelfBasicHeaderRenderer": { "title": { "runs": [ { "text": "Moods & genres" } ] } } },
+            "contents": [ button("Chill", "FEmusic_moods_and_genres_category", Some(0xFF2DD4BF)) ] } },
+        { "musicCarouselShelfRenderer": { "header": { "musicCarouselShelfBasicHeaderRenderer": { "title": { "runs": [ { "text": "Top songs" } ] } } },
+            "contents": [ ranked ] } } ] });
+    let p = page(&v).unwrap();
+    assert_eq!(p.shelves[0].items.len(), 1, "no podcasts");
+    assert_eq!(p.shelves[0].items[0].kind, Kind::Link);
+    assert_eq!(p.shelves[1].items[0].color, Some(0x2DD4BF));
+    assert_eq!(p.shelves[1].items[0].params.as_deref(), Some("p1"));
+    let song = &p.shelves[2].items[0];
+    assert_eq!((song.rank.as_deref(), song.trend), (Some("1"), Some(1)));
 }

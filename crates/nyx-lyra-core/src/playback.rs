@@ -39,6 +39,35 @@ pub struct Track {
     pub playlist_id: Option<String>,
 }
 
+/// YouTube Music's repeat: the queue, one song, or neither.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Repeat {
+    #[default]
+    Off,
+    All,
+    One,
+}
+
+impl Repeat {
+    /// The mode after this one, in the order YouTube Music's button goes.
+    pub fn next(self) -> Repeat {
+        match self {
+            Repeat::Off => Repeat::All,
+            Repeat::All => Repeat::One,
+            Repeat::One => Repeat::Off,
+        }
+    }
+
+    pub fn wire(self) -> &'static str {
+        match self {
+            Repeat::Off => "NONE",
+            Repeat::All => "ALL",
+            Repeat::One => "ONE",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
 pub struct Controls {
     pub play: bool,
@@ -64,6 +93,12 @@ pub struct Playback {
     pub error: Option<u16>,
     /// Whether the page has a signed-in YouTube Music session, once it says.
     pub signed_in: Option<bool>,
+    /// The song is liked, when the page shows its like button.
+    pub liked: Option<bool>,
+    /// The player bar's repeat mode, when it shows.
+    pub repeat: Option<Repeat>,
+    /// The queue's Autoplay switch, when it shows.
+    pub autoplay: Option<bool>,
 }
 
 impl Playback {
@@ -101,6 +136,13 @@ impl Playback {
             connection,
             error: s.error,
             signed_in: s.signed,
+            liked: s.like.as_deref().map(|l| l == "LIKE"),
+            repeat: s.repeat.as_deref().map(|r| match r {
+                "ALL" => Repeat::All,
+                "ONE" => Repeat::One,
+                _ => Repeat::Off,
+            }),
+            autoplay: s.autoplay,
         }
     }
 

@@ -15,8 +15,8 @@ path = "src/main.rs"
 nyx-core = { git = "https://github.com/design-nexus/nyx-core.git", rev = "4f05fb8fc92ec211f4e0f0b722fdf29a083c9e89" }
 nyx-actions = { git = "https://github.com/design-nexus/nyx-core.git", rev = "4f05fb8fc92ec211f4e0f0b722fdf29a083c9e89", default-features = false }
 nyx-lyra-core = { path = "../../crates/nyx-lyra-core" }
-nyx-theme = { git = "https://github.com/design-nexus/nyx-design.git", rev = "cf393978364ca7b2a309a88a8d1651bf9d338916" }
-nyx-ui = { git = "https://github.com/design-nexus/nyx-design.git", rev = "cf393978364ca7b2a309a88a8d1651bf9d338916" }
+nyx-theme = { git = "https://github.com/design-nexus/nyx-design.git", rev = "8b41fb14ec11fa18199d8f4228d267d94dc8e323" }
+nyx-ui = { git = "https://github.com/design-nexus/nyx-design.git", rev = "8b41fb14ec11fa18199d8f4228d267d94dc8e323" }
 rusqlite = { version = "0.40", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 ureq = "3"

@@ -5,7 +5,7 @@
 
 mod parse;
 
-pub use parse::{Lyrics, Next, ParseError, RESULTS, logged_in, lyrics, next, page};
+pub use parse::{Lyrics, Next, ParseError, RESULTS, TOP_RESULT, account, channels, logged_in, lyrics, next, page, switch_url};
 
 use serde_json::{Value, json};
 
@@ -19,12 +19,25 @@ pub const LIBRARY_ALBUMS: &str = "FEmusic_liked_albums";
 pub const LIBRARY_ARTISTS: &str = "FEmusic_library_corpus_track_artists";
 pub const LIBRARY_SONGS: &str = "FEmusic_liked_videos";
 pub const LIKED_MUSIC: &str = "VLLM";
+pub const HISTORY: &str = "FEmusic_history";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Endpoint {
     Search,
     Browse,
     Next,
+    /// The signed-in channel: its name, handle and photo.
+    AccountMenu,
+    /// The channels the signed-in Google account can switch to.
+    AccountsList,
+    /// A new playlist in the library. This and subscribing are the changes Lyra makes
+    /// through requests; likes and the player's buttons go through the page's own controls.
+    CreatePlaylist,
+    Subscribe,
+    Unsubscribe,
+    /// Save an album or playlist to the library, or take it out.
+    Save,
+    Unsave,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -40,6 +53,13 @@ impl Request {
             Endpoint::Search => "search",
             Endpoint::Browse => "browse",
             Endpoint::Next => "next",
+            Endpoint::AccountMenu => "account/account_menu",
+            Endpoint::AccountsList => "account/accounts_list",
+            Endpoint::CreatePlaylist => "playlist/create",
+            Endpoint::Subscribe => "subscription/subscribe",
+            Endpoint::Unsubscribe => "subscription/unsubscribe",
+            Endpoint::Save => "like/like",
+            Endpoint::Unsave => "like/removelike",
         };
         json!({ "endpoint": endpoint, "body": self.body })
     }
@@ -55,17 +75,72 @@ pub fn search(query: &str) -> Option<Request> {
     (!q.is_empty() && q.chars().count() <= 200).then(|| Request { endpoint: Endpoint::Search, body: json!({ "query": q }) })
 }
 
+/// A search with one of its filters (Songs, Albums…).
+pub fn search_with(query: &str, params: &str) -> Option<Request> {
+    let mut r = search(query)?;
+    token(params).then(|| {
+        r.body["params"] = params.into();
+        r
+    })
+}
+
 /// A page by its browse ID: one of the constants above, or an album's, artist's or
 /// playlist's from an [`crate::model::Item`].
 pub fn browse(id: &str) -> Option<Request> {
     valid_id(id).then(|| Request { endpoint: Endpoint::Browse, body: json!({ "browseId": id }) })
 }
 
+/// A page with one of its own options: a mood chip on Home, a sort order in the library.
+pub fn browse_with(id: &str, params: &str) -> Option<Request> {
+    (valid_id(id) && token(params))
+        .then(|| Request { endpoint: Endpoint::Browse, body: json!({ "browseId": id, "params": params }) })
+}
+
+fn token(t: &str) -> bool {
+    (1..=4096).contains(&t.len()) && t.bytes().all(|b| b.is_ascii_alphanumeric() || b"_-%=".contains(&b))
+}
+
+pub fn account_menu() -> Request {
+    Request { endpoint: Endpoint::AccountMenu, body: json!({}) }
+}
+
+pub fn accounts_list() -> Request {
+    Request { endpoint: Endpoint::AccountsList, body: json!({}) }
+}
+
+/// A private playlist named `title`, holding these songs (a saved queue) or none.
+pub fn create_playlist(title: &str, video_ids: &[String]) -> Option<Request> {
+    let title = title.trim();
+    let ok = (1..=150).contains(&title.chars().count())
+        && !title.chars().any(char::is_control)
+        && video_ids.len() <= 500
+        && video_ids.iter().all(|v| valid_id(v));
+    ok.then(|| Request {
+        endpoint: Endpoint::CreatePlaylist,
+        body: json!({ "title": title, "description": "", "privacyStatus": "PRIVATE", "videoIds": video_ids }),
+    })
+}
+
+/// Follow an artist's channel (`on`) or stop.
+pub fn subscribe(channel_id: &str, on: bool) -> Option<Request> {
+    valid_id(channel_id).then(|| Request {
+        endpoint: if on { Endpoint::Subscribe } else { Endpoint::Unsubscribe },
+        body: json!({ "channelIds": [channel_id] }),
+    })
+}
+
+/// Save an album or playlist (its list ID) to the library (`on`) or take it out.
+pub fn save(playlist_id: &str, on: bool) -> Option<Request> {
+    valid_id(playlist_id).then(|| Request {
+        endpoint: if on { Endpoint::Save } else { Endpoint::Unsave },
+        body: json!({ "target": { "playlistId": playlist_id } }),
+    })
+}
+
 /// The next part of a long list (a playlist's songs, the library), from
 /// [`crate::model::Page::continuation`].
 pub fn more(token: &str) -> Option<Request> {
-    let ok = (1..=4096).contains(&token.len()) && token.bytes().all(|b| b.is_ascii_alphanumeric() || b"_-%=".contains(&b));
-    ok.then(|| Request { endpoint: Endpoint::Browse, body: json!({ "continuation": token }) })
+    self::token(token).then(|| Request { endpoint: Endpoint::Browse, body: json!({ "continuation": token }) })
 }
 
 /// A playlist's or album's queue from its start, to find its first song.
@@ -100,5 +175,14 @@ mod tests {
         assert!(browse("").is_none());
         assert!(up_next("dX3k_QDnzHE", Some("RDAMVM x")).is_none());
         assert_eq!(up_next("dX3k_QDnzHE", None).unwrap().wire()["endpoint"], "next");
+        assert!(browse_with("FEmusic_home", "ggMPOg1uX1JOQWZFeDByc2Jm").is_some());
+        assert!(browse_with("FEmusic_home", "a b").is_none());
+        assert_eq!(account_menu().wire()["endpoint"], "account/account_menu");
+        assert!(create_playlist("  ", &[]).is_none());
+        assert!(create_playlist("Mix\u{7}", &[]).is_none());
+        assert!(create_playlist("Road trip", &["../x".into()]).is_none());
+        let r = create_playlist(" Road trip ", &["dX3k_QDnzHE".into()]).unwrap();
+        assert_eq!(r.wire()["body"]["title"], "Road trip");
+        assert_eq!(r.wire()["body"]["privacyStatus"], "PRIVATE");
     }
 }

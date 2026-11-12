@@ -6,22 +6,65 @@ window.lyra-window .page-body { padding: 6px 24px 28px 16px; }
 window.lyra-window .np-column { padding: 2px 8px 0 12px; }
 window.lyra-window .np-column .nav-group { margin: 8px 2px 8px; font-size: 0.846em; font-weight: 600; color: @theme_text_tertiary; letter-spacing: 0.06em; }
 window.lyra-window .np-art { border-radius: var(--nyx-radius-card); }
-window.lyra-window .np-title { font-size: 1.154em; font-weight: 600; margin: 12px 2px 0; }
-window.lyra-window .np-artist { color: @theme_dim_text; margin: 2px 2px 6px; }
+window.lyra-window .np-meta { margin: 14px 2px 0; }
+window.lyra-window .np-title { font-size: 1.154em; font-weight: 600; letter-spacing: -0.01em; }
+window.lyra-window .np-artist { color: @theme_dim_text; }
+window.lyra-window .np-from { margin: 16px 2px 6px; }
+window.lyra-window .np-from .nav-group { margin: 0; }
+window.lyra-window .np-count { color: @theme_text_tertiary; font-size: 0.846em; }
+window.lyra-window .np-list { margin: 0; }
+window.lyra-window button.track-row { min-height: 32px; padding: 0 8px; border-radius: var(--nyx-radius-small); }
+window.lyra-window button.track-row.on, window.lyra-window button.queue-row.on { background: @nav_active; }
+window.lyra-window button.track-row.on .track-name, window.lyra-window button.queue-row.on .queue-title { color: @theme_accent; font-weight: 500; }
+window.lyra-window .track-name { font-weight: 400; color: @theme_text; }
+window.lyra-window .track-number { color: @theme_text_tertiary; font-size: 0.846em; font-feature-settings: "tnum"; }
+window.lyra-window .queue-art { border-radius: 4px; }
+window.lyra-window image.eq { color: @theme_accent; }
 window.lyra-window button.art-button { padding: 0; background: none; box-shadow: none; }
 
 /* Rows of what plays next */
-window.lyra-window button.queue-row { padding: 4px 6px; border-radius: var(--nyx-radius-small); }
+window.lyra-window button.queue-row { min-height: 46px; padding: 0 8px; border-radius: var(--nyx-radius-small); }
 window.lyra-window .queue-title { font-weight: 500; }
 window.lyra-window .queue-sub, window.lyra-window .queue-time { color: @theme_dim_text; font-size: 0.923em; font-feature-settings: "tnum"; }
 
 /* Shelves, tiles and songs */
 window.lyra-window .shelf-head { margin: 22px 0 10px; }
+window.lyra-window flowbox.chips flowboxchild { padding: 0; background: none; }
+window.lyra-window .chips button.chip { padding: 4px 11px; min-height: 0; font-weight: 500; }
+window.lyra-window button.ghost { background: none; box-shadow: none; color: @theme_dim_text; }
+window.lyra-window button.shelf-arrow { min-width: 26px; min-height: 26px; padding: 0; }
+window.lyra-window button.shelf-arrow:disabled { opacity: 0.4; }
+window.lyra-window .hplay { min-width: 34px; min-height: 34px; margin: 8px; border-radius: 999px; background: @theme_accent; color: @theme_on_accent; opacity: 0; box-shadow: 0 2px 8px alpha(black, 0.35); }
+window.lyra-window .hplay image { margin: 10px 9px 10px 11px; -gtk-icon-size: 14px; }
+window.lyra-window menubutton.tile-more { margin: 6px; opacity: 0; }
+window.lyra-window menubutton.tile-more > button { min-width: 26px; min-height: 26px; padding: 0; border-radius: 7px; background: alpha(black, 0.45); color: white; }
+window.lyra-window button.tile:hover .hplay, window.lyra-window button.tile:hover menubutton.tile-more { opacity: 1; }
+window.lyra-window .new-tile { background: @field; }
+window.lyra-window .liked-art { background: linear-gradient(135deg, shade(@theme_accent, 1.25), shade(@theme_accent, 0.75)); }
+window.lyra-window .liked-art .art-placeholder { color: white; opacity: 1; }
+window.lyra-window .feature { padding: 16px; margin-top: 22px; border-radius: var(--nyx-radius-card); background: @theme_card; }
+window.lyra-window .feature .art { border-radius: var(--nyx-radius-small); }
+window.lyra-window .feature-title { font-size: 1.308em; font-weight: 600; letter-spacing: -0.012em; }
+window.lyra-window .feature-kind { font-size: 0.846em; color: @theme_text_tertiary; font-weight: 600; letter-spacing: 0.06em; }
+window.lyra-window .library-bar { margin-bottom: 14px; }
+window.lyra-window .first-strip { margin-top: 2px; }
+window.lyra-window button.link-card { padding: 0 14px; min-height: 44px; border-radius: var(--nyx-radius-card); background: @theme_card; }
+window.lyra-window button.link-card image { color: @theme_dim_text; }
+window.lyra-window .link-title, window.lyra-window .mood-title { font-weight: 500; color: @theme_text; }
+window.lyra-window button.mood-tile { padding: 0 12px 0 0; min-height: 34px; border-radius: var(--nyx-radius-small); background: @theme_card; }
+window.lyra-window .mood-stripe { min-width: 3px; border-radius: 2px 0 0 2px; }
+window.lyra-window .rank { font-weight: 600; color: @theme_text; font-feature-settings: "tnum"; }
+window.lyra-window image.trend { -gtk-icon-size: 12px; }
+window.lyra-window image.trend.up { color: @theme_success; }
+window.lyra-window image.trend.down { color: @theme_danger; }
+window.lyra-window image.trend.same { color: @theme_text_tertiary; }
+window.lyra-window .view-switch button.on { background: @nav_active; color: @theme_accent; }
 window.lyra-window .shelf-title { font-size: 1.154em; font-weight: 600; letter-spacing: -0.01em; }
-window.lyra-window button.tile { padding: 4px; border-radius: var(--nyx-radius-card); }
+window.lyra-window button.tile { padding: 0; border-radius: var(--nyx-radius-small); background: none; box-shadow: none; }
 window.lyra-window button.tile .art, window.lyra-window .song-row .art { border-radius: var(--nyx-radius-small); }
 window.lyra-window .art.round { border-radius: 999px; }
-window.lyra-window .tile-title { font-weight: 500; margin-top: 2px; }
+window.lyra-window .tile-title, window.lyra-window .song-title, window.lyra-window .queue-title { font-weight: 500; color: @theme_text; }
+window.lyra-window .tile-sub { margin-top: 2px; }
 window.lyra-window .tile-sub { color: @theme_dim_text; font-size: 0.923em; }
 window.lyra-window button.song-row { padding: 6px 8px; border-radius: var(--nyx-radius-small); }
 window.lyra-window button.song-row label, window.lyra-window button.tile label, window.lyra-window button.queue-row label { font-weight: 400; }
@@ -34,10 +77,25 @@ window.lyra-window button.load-more { margin: 16px 0; }
 
 /* Album, playlist and artist headers */
 window.lyra-window .detail-head { margin: 14px 0 22px; }
+window.lyra-window .artist-banner { margin: 0 0 6px; min-height: 260px; border-radius: var(--nyx-radius-card); }
+window.lyra-window .artist-backdrop { opacity: 0.35; }
+window.lyra-window .artist-fade { background: linear-gradient(to bottom, alpha(@theme_bg, 0.2), @theme_bg); }
+window.lyra-window .artist-head { padding: 20px 24px 8px 16px; }
+window.lyra-window .artist-name { font-size: 2.6em; font-weight: 700; letter-spacing: -0.025em; color: @theme_text; }
 window.lyra-window .detail-art { border-radius: var(--nyx-radius-card); }
 window.lyra-window .detail-kind { color: @theme_dim_text; font-size: 0.923em; }
 window.lyra-window .detail-title { font-size: 2.15em; font-weight: 600; letter-spacing: -0.022em; }
 window.lyra-window .detail-desc { color: @theme_dim_text; }
+window.lyra-window button.by-link { padding: 2px 6px 2px 0; }
+window.lyra-window .by-name { font-weight: 600; color: @theme_text; }
+window.lyra-window .table-head { padding: 0 8px 6px; margin-bottom: 4px; border-bottom: 1px solid alpha(@theme_text, 0.06); }
+window.lyra-window .col-head { color: @theme_text_tertiary; font-size: 0.769em; font-weight: 600; letter-spacing: 0.06em; }
+window.lyra-window .track-table button.track-row { min-height: 34px; }
+window.lyra-window button.track-row label { font-weight: 400; }
+window.lyra-window image.row-heart { color: @theme_accent; -gtk-icon-size: 14px; }
+window.lyra-window button.track-row.on label.track-name { font-weight: 500; }
+window.lyra-window menubutton.row-more { opacity: 0; }
+window.lyra-window button:hover menubutton.row-more { opacity: 1; }
 
 /* Search's top result */
 window.lyra-window button.top-result { padding: 18px; border-radius: var(--nyx-radius-card); background: @theme_card; }
@@ -49,8 +107,17 @@ window.lyra-window .bar-art { border-radius: 6px; }
 window.lyra-window .bar-title { font-weight: 500; }
 window.lyra-window .bar-sub { color: @theme_dim_text; font-size: 0.923em; }
 window.lyra-window .bar-time { color: @theme_text_tertiary; font-size: 0.846em; font-feature-settings: "tnum"; }
-window.lyra-window .bar-state { color: @theme_warning; font-size: 0.923em; font-weight: 500; margin-right: 8px; }
-window.lyra-window button.play-button { min-width: 36px; min-height: 36px; border-radius: 999px; background: @theme_accent; color: @theme_on_accent; margin: 0 6px; }
+window.lyra-window .bar-sub.warn { color: @theme_warning; }
+window.lyra-window .state-chip { min-height: 24px; padding: 0 9px; border-radius: var(--nyx-radius-small); font-size: 0.923em; font-weight: 500; }
+window.lyra-window .state-chip.warn { background: alpha(@theme_warning, 0.14); color: @theme_warning; }
+window.lyra-window button.pressed, window.lyra-window button.waiting { background: @nav_active; color: @theme_accent; }
+window.lyra-window button.like.on { color: @theme_accent; }
+window.lyra-window button.play-button.waiting { background: alpha(@theme_accent, 0.35); }
+window.lyra-window button.muted { color: @theme_text_tertiary; }
+window.lyra-window .player-bar.off .play-button, window.lyra-window .player-bar.off button.shuffle, window.lyra-window .player-bar.off scale { opacity: 0.38; }
+window.lyra-window .empty-art { background: @field; box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.08); }
+window.lyra-window .empty-art .art-placeholder { color: @theme_text_tertiary; }
+window.lyra-window button.play-button { padding: 0; min-width: 36px; min-height: 36px; border-radius: 999px; background: @theme_accent; color: @theme_on_accent; margin: 0 6px; }
 window.lyra-window button.play-button:disabled { background: alpha(@theme_accent, 0.35); }
 window.lyra-window button.play-button.large { min-width: 56px; min-height: 56px; }
 window.lyra-window button.play-button.small { min-width: 30px; min-height: 30px; margin: 0 4px; }
@@ -61,6 +128,12 @@ window.lyra-window scale.seek highlight, window.lyra-window scale.volume highlig
 window.lyra-window .expanded { padding: 18px 40px 26px; }
 window.lyra-window .big-art { border-radius: 15px; }
 window.lyra-window .big-title { font-size: 1.85em; font-weight: 600; letter-spacing: -0.02em; }
+window.lyra-window .big-sub { color: @theme_dim_text; }
+window.lyra-window .big-meta { margin: 16px 0 14px; }
+window.lyra-window .big-seek { margin-bottom: 10px; }
+window.lyra-window .queue-head { margin: 4px 2px 2px; }
+window.lyra-window .queue-from { color: @theme_dim_text; font-size: 0.846em; }
+window.lyra-window .autoplay-card { padding: 10px 12px; border-radius: var(--nyx-radius-card); background: @theme_card; }
 window.lyra-window .lyrics { font-size: 1.3em; font-weight: 500; line-height: 1.5; }
 
 /* Sign-in */
@@ -68,8 +141,19 @@ window.lyra-window .signin-strip { padding: 10px 16px; border-bottom: 1px solid 
 window.lyra-window .signin-lock { color: @theme_accent; -gtk-icon-size: 18px; }
 window.lyra-window .signin-title { font-weight: 600; }
 
-/* The sidebar's playlist covers */
+/* The header's search: the theme's bar-search, with the mockup's key hint */
+window.lyra-window .search-key { margin-right: 10px; font-size: 0.846em; color: @theme_text_tertiary; opacity: 0.8; }
+
+/* The sidebar's playlist covers and the channel at its foot */
 window.lyra-window .nav-art { border-radius: 5px; }
+window.lyra-window .avatar { border-radius: 999px; }
+window.lyra-window menubutton.acct > button { padding: 8px 8px 2px 10px; border-radius: var(--nyx-radius-small); background: none; box-shadow: none; }
+window.lyra-window menubutton.acct > button:hover { background: alpha(@theme_text, 0.05); }
+window.lyra-window .acct-name { font-weight: 500; }
+window.lyra-window .acct-sub { font-size: 0.846em; color: @theme_dim_text; margin-top: 1px; }
+window.lyra-window .acct-chev { color: @theme_text_tertiary; -gtk-icon-size: 14px; }
+popover.acct-menu > contents { padding: 8px; min-width: 240px; }
+popover.acct-menu button.menu-row { padding: 6px 8px; border-radius: var(--nyx-radius-small); }
 
 /* The mini-player */
 window.lyra-mini .mini-row { padding: 12px; }

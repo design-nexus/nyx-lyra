@@ -5,6 +5,7 @@ mod art;
 mod cache;
 mod control;
 mod dev;
+mod icons;
 mod mpris;
 mod player;
 mod prefs;
@@ -31,13 +32,13 @@ pub fn player() -> Option<Rc<Player>> {
 
 /// Lyra's own symbolic icons, written to the cache once and added to the icon search path.
 fn install_icons() {
-    const ICONS: &[(&str, &str)] = &[(
+    const APP: (&str, &str) = (
         "io.github.design_nexus.nyx.Lyra-symbolic.svg",
         include_str!("../data/icons/io.github.design_nexus.nyx.Lyra-symbolic.svg"),
-    )];
+    );
     let dir = nyx_core::paths::cache_dir().join("icons");
     let _ = std::fs::create_dir_all(&dir);
-    for (name, svg) in ICONS {
+    for (name, svg) in std::iter::once(&APP).chain(icons::ICONS) {
         let path = dir.join(name);
         if std::fs::read_to_string(&path).ok().as_deref() != Some(*svg) {
             let _ = std::fs::write(&path, svg);

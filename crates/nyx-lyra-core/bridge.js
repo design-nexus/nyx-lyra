@@ -41,6 +41,12 @@
   };
   const cookie = (n) => (document.cookie.match(new RegExp("(?:^|; )" + n + "=([^;]*)")) || [])[1];
   const num = (x) => (typeof x === "number" && isFinite(x) ? Math.round(x * 1000) / 1000 : null);
+  // YouTube Music's own player bar (the app's, not the one in its page header) and the
+  // queue's Autoplay switch: like, shuffle, repeat and Autoplay exist only there.
+  const bar = () => document.querySelector("ytmusic-player-bar.ytmusic-app") || document.querySelector("ytmusic-player-bar");
+  const likeBox = () => { const b = bar(); return b ? b.querySelector("ytmusic-like-button-renderer") : null; };
+  const autoplay = () => document.querySelector("tp-yt-paper-toggle-button#automix");
+  const press = (el) => { if (!el) return false; el.click(); return true; };
   const snapshot = () => {
     const m = media();
     const md = ms ? ms.metadata : null;
@@ -66,6 +72,9 @@
       video: new URLSearchParams(location.search).get("v"),
       list: new URLSearchParams(location.search).get("list"),
       signed: !!(cookie("SAPISID") || cookie("__Secure-3PAPISID")),
+      like: (likeBox() && likeBox().getAttribute("like-status")) || null,
+      repeat: (bar() && bar().getAttribute("repeat-mode")) || null,
+      autoplay: autoplay() ? autoplay().hasAttribute("checked") : null,
     };
   };
 
@@ -119,6 +128,35 @@
         if (m) return (m.currentTime = t), "element";
         return "no-media";
       }
+      case "like": {
+        const box = likeBox();
+        const button = box && box.querySelectorAll("button")[0];
+        if (!button) return "unsupported";
+        if ((box.getAttribute("like-status") === "LIKE") !== !!c.on) button.click();
+        return "element";
+      }
+      case "shuffle": {
+        const b = bar();
+        return b && press(b.querySelector("yt-icon-button.shuffle button")) ? "element" : "unsupported";
+      }
+      case "repeat": {
+        const order = ["NONE", "ALL", "ONE"];
+        const b = bar();
+        const want = order.indexOf(c.mode);
+        const button = b && b.querySelector("yt-icon-button.repeat button");
+        if (want < 0) return "bad-argument";
+        if (!button) return "unsupported";
+        // The button goes NONE, ALL, ONE; press it as often as it takes.
+        const steps = (want - order.indexOf(b.getAttribute("repeat-mode")) + 3) % 3;
+        for (let i = 0; i < steps; i++) button.click();
+        return "element";
+      }
+      case "autoplay": {
+        const a = autoplay();
+        if (!a) return "unsupported";
+        if (a.hasAttribute("checked") !== !!c.on) a.click();
+        return "element";
+      }
       case "volume": {
         const v = Number(c.level);
         if (!isFinite(v) || v < 0 || v > 100) return "bad-argument";
@@ -134,7 +172,7 @@
 
   // The web client's own data requests, made from this page the way it makes them: its
   // context from ytcfg, and its signed-in header unless auth is false. Only these endpoints.
-  const ENDPOINTS = new Set(["search", "browse", "next"]);
+  const ENDPOINTS = new Set(["search", "browse", "next", "account/account_menu", "account/accounts_list", "playlist/create", "subscription/subscribe", "subscription/unsubscribe", "like/like", "like/removelike"]);
   const cfg = (k) => (window.ytcfg && window.ytcfg.get ? window.ytcfg.get(k) : undefined);
   const sha1 = async (s) =>
     [...new Uint8Array(await crypto.subtle.digest("SHA-1", new TextEncoder().encode(s)))].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -155,6 +193,12 @@
       "X-Youtube-Client-Name": String(cfg("INNERTUBE_CONTEXT_CLIENT_NAME") ?? ""),
       "X-Youtube-Client-Version": String(cfg("INNERTUBE_CLIENT_VERSION") ?? ""),
     };
+    // A channel (brand account) chosen at sign-in: without its page ID the requests reach
+    // the Google account behind it, as YouTube Music's own client would without it.
+    const page = cfg("DELEGATED_SESSION_ID");
+    if (page) headers["X-Goog-PageId"] = String(page);
+    const visitor = cfg("VISITOR_DATA");
+    if (visitor) headers["X-Goog-Visitor-Id"] = String(visitor);
     if (c.auth !== false) {
       const a = await signedIn();
       if (a) headers.Authorization = a;
@@ -162,7 +206,7 @@
     const t0 = performance.now();
     const r = await fetch(`/youtubei/v1/${c.endpoint}?prettyPrint=false`, { method: "POST", credentials: "include", headers, body: JSON.stringify({ context, ...c.body }) });
     const text = await r.text();
-    return JSON.stringify({ status: r.status, ms: Math.round(performance.now() - t0), bytes: text.length, signed: !!headers.Authorization, text });
+    return JSON.stringify({ status: r.status, ms: Math.round(performance.now() - t0), bytes: text.length, signed: !!headers.Authorization, channel: !!page, text });
   };
   post({ kind: "hello", path: location.pathname });
 })();

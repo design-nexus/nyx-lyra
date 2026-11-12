@@ -5,6 +5,7 @@
 
 mod column;
 mod expanded;
+mod grid;
 pub mod mini;
 mod pages;
 mod playerbar;
@@ -29,6 +30,19 @@ pub enum Route {
     Search(String),
     Library(Tab),
     Liked,
+    History,
+    /// A search with one of its filters (Songs, Albums…).
+    SearchFilter {
+        query: String,
+        title: String,
+        params: String,
+    },
+    /// A page with one of its options: Home with a mood (a chip), a mood or genre, a chart.
+    Mood {
+        id: String,
+        title: String,
+        params: String,
+    },
     /// An album's, artist's or playlist's page.
     Browse {
         id: String,
@@ -53,6 +67,9 @@ impl Route {
             Route::Search(q) => format!("“{q}”"),
             Route::Library(_) => "Library".into(),
             Route::Liked => "Liked Music".into(),
+            Route::History => "History".into(),
+            Route::Mood { title, .. } => title.clone(),
+            Route::SearchFilter { query, title, .. } => format!("“{query}” · {title}"),
             Route::Browse { title, .. } => title.clone(),
         }
     }
@@ -66,6 +83,9 @@ pub const SHORTCUTS: &[(&[&str], &str)] = &[
     (&["Alt", "←"], "Back"),
     (&["Alt", "→"], "Forward"),
     (&["F"], "Now playing"),
+    (&["L"], "Like or unlike the song"),
+    (&["Q"], "Up next"),
+    (&["M"], "Mute"),
     (&["Ctrl", "M"], "Mini-player"),
     (&["Ctrl", "B"], "Collapse the sidebar"),
     (&["Esc"], "Close now playing"),
@@ -82,7 +102,7 @@ pub struct Ui {
     forward: gtk::Button,
     side: sidebar::Side,
     column: column::Column,
-    bar: playerbar::Bar,
+    bar: Rc<playerbar::Bar>,
     now: Rc<expanded::Expanded>,
     web: gtk::Widget,
     web_hidden: gtk::Box,
@@ -91,7 +111,9 @@ pub struct Ui {
     signin_button: gtk::Button,
     /// "Not now" was chosen: the sheet waits for the header's Sign in.
     declined: Cell<bool>,
-    history: RefCell<Vec<Route>>,
+    /// The header's way back from Now playing.
+    collapse: gtk::Button,
+    pub history: RefCell<Vec<Route>>,
     ahead: RefCell<Vec<Route>>,
     /// The queue for the song playing (YouTube Music's own, from its Up next).
     pub next: RefCell<Option<Next>>,
@@ -123,8 +145,8 @@ pub fn build(app: &gtk::Application, web: &gtk::Widget) -> gtk::ApplicationWindo
     header.start.append(&back);
     header.start.append(&forward);
     let search = gtk::SearchEntry::builder().placeholder_text("Search YouTube Music").width_request(340).build();
-    search.add_css_class("header-search");
-    header.center.append(&search);
+    search.add_css_class("bar-search");
+    header.center.append(&search_with_hint(&search));
     let signin_button = gtk::Button::with_label("Sign in");
     signin_button.add_css_class("suggested-action");
     signin_button.set_visible(false);
@@ -134,10 +156,16 @@ pub fn build(app: &gtk::Application, web: &gtk::Widget) -> gtk::ApplicationWindo
         }
     });
     header.end.append(&signin_button);
-    let mini_button = widgets::bar_button("view-restore-symbolic", "Mini-player (Ctrl+M)");
+    let collapse = widgets::bar_button("lyra-collapse-symbolic", "Back to the library (Esc)");
+    collapse.set_visible(false);
+    collapse.connect_clicked(|_| close_now());
+    header.end.append(&collapse);
+    let mini_button = widgets::bar_button("lyra-mini-symbolic", "Mini-player (Ctrl+M)");
     mini_button.connect_clicked(|_| mini::toggle());
     header.end.append(&mini_button);
-    header.end.append(&chrome::settings_button(settings::open));
+    let settings_button = chrome::settings_button(settings::open);
+    settings_button.set_icon_name("lyra-sliders-symbolic");
+    header.end.append(&settings_button);
 
     let side = sidebar::Side::new(&window);
     let column = column::Column::new();
@@ -201,6 +229,7 @@ pub fn build(app: &gtk::Application, web: &gtk::Widget) -> gtk::ApplicationWindo
         signin,
         signin_button,
         declined: Cell::new(false),
+        collapse,
         history: RefCell::default(),
         ahead: RefCell::default(),
         next: RefCell::default(),
@@ -239,6 +268,9 @@ pub fn build(app: &gtk::Application, web: &gtk::Widget) -> gtk::ApplicationWindo
         this.on_state(&p.state());
     }
     navigate(Route::Home);
+    // Nothing has the keyboard at first, so Space and F work at once (GTK would give it
+    // to the search field).
+    window.connect_map(|w| gtk::prelude::GtkWindowExt::set_focus(w, None::<&gtk::Widget>));
     window
 }
 
@@ -252,7 +284,8 @@ impl Ui {
     fn on_event(self: &Rc<Self>, e: &Event) {
         match e {
             Event::State(s) => self.on_state(s),
-            Event::Failed { command, failure, .. } => {
+            Event::Failed { id, command, failure } => {
+                self.bar.ended(*id);
                 use nyx_lyra_core::command::Failure;
                 let what = match command {
                     Command::Next => "skip to the next song",
@@ -271,11 +304,14 @@ impl Ui {
                 };
                 nyx_ui::toast::show(&self.overlay, &format!("Couldn't {what}: {why}"));
             }
-            Event::Confirmed { .. } => {}
+            Event::Confirmed { id, .. } => self.bar.ended(*id),
         }
     }
 
     fn on_state(self: &Rc<Self>, s: &Playback) {
+        if s.track.is_none() && self.top.visible_child_name().as_deref() == Some("now") {
+            close_now();
+        }
         self.bar.update(s);
         self.column.update(s);
         self.now.update(s);
@@ -302,6 +338,9 @@ impl Ui {
                 }
                 _ => {}
             }
+            if s.signed_in.is_some() && s.signed_in != self.signed_in.get() {
+                self.side.set_signed_in(s.signed_in == Some(true));
+            }
             if s.signed_in.is_some() {
                 self.signed_in.set(s.signed_in);
             }
@@ -310,7 +349,11 @@ impl Ui {
         // A new song: fetch its queue (YouTube Music's own Up next).
         let video = s.track.as_ref().and_then(|t| t.video_id.clone());
         if video.is_some() && *self.queued_for.borrow() != video {
+            let first = self.queued_for.borrow().is_none();
             *self.queued_for.borrow_mut() = video.clone();
+            if !first {
+                notify_song(s);
+            }
             // A song played on its own continues with its radio, as YouTube Music's page does.
             let list =
                 s.track.as_ref().and_then(|t| t.playlist_id.clone()).or_else(|| video.as_ref().map(|v| format!("RDAMVM{v}")));
@@ -331,6 +374,10 @@ impl Ui {
                 );
             }
         }
+    }
+
+    pub fn side_reload(&self) {
+        self.side.reload();
     }
 
     pub fn signing_in(&self) -> bool {
@@ -457,6 +504,82 @@ impl Signin {
     }
 }
 
+/// The header's search with the mockup's "Ctrl F" at its right, shown while it's idle.
+fn search_with_hint(search: &gtk::SearchEntry) -> gtk::Overlay {
+    let overlay = gtk::Overlay::new();
+    overlay.set_child(Some(search));
+    let hint = widgets::label("Ctrl F", "search-key");
+    hint.set_halign(gtk::Align::End);
+    hint.set_valign(gtk::Align::Center);
+    hint.set_can_target(false);
+    overlay.add_overlay(&hint);
+    let update = {
+        let (hint, search) = (hint.clone(), search.clone());
+        move || hint.set_visible(search.text().is_empty() && !search.has_focus())
+    };
+    let focus = gtk::EventControllerFocus::new();
+    let (u1, u2) = (update.clone(), update.clone());
+    focus.connect_enter(move |_| u1());
+    focus.connect_leave(move |_| u2());
+    search.add_controller(focus);
+    search.connect_search_changed(move |_| update());
+    overlay
+}
+
+/// The song that started, as a notification, when Lyra isn't in front (Settings → Playback).
+fn notify_song(s: &Playback) {
+    let Some(ui) = ui() else { return };
+    let Some(t) = &s.track else { return };
+    if !prefs::get().notify || ui.window.is_active() {
+        return;
+    }
+    let icon = t.artwork.as_deref().and_then(crate::art::file).map(|p| p.to_string_lossy().to_string());
+    let line = match &t.album {
+        Some(a) if !a.is_empty() => format!("{} · {a}", t.artist),
+        _ => t.artist.clone(),
+    };
+    let _ = std::process::Command::new("notify-send")
+        .arg("--app-name=Lyra")
+        .arg(format!("--icon={}", icon.unwrap_or_else(|| crate::APP_ID.to_string())))
+        .arg("--hint=string:x-canonical-private-synchronous:nyx-lyra")
+        .arg("--expire-time=4000")
+        .arg(&t.title)
+        .arg(line)
+        .spawn();
+}
+
+/// Ask for a name and make a private playlist in the library.
+pub fn new_playlist() {
+    widgets::ask_text("New playlist", "A private playlist in your YouTube Music library.", "", "Create", |name| {
+        let (Some(req), Some(p)) = (youtube::create_playlist(&name, &[]), player()) else { return };
+        p.request(
+            &req,
+            Box::new(move |r| {
+                let Some(ui) = ui() else { return };
+                match r {
+                    Ok(_) => {
+                        ui.side.reload();
+                        nyx_ui::toast::show(&ui.overlay, "Playlist made");
+                    }
+                    Err(e) => nyx_ui::toast::show(&ui.overlay, &format!("Couldn't make the playlist: {e}")),
+                }
+            }),
+        );
+    });
+}
+
+/// Use YouTube Music as another channel: its pages, library and cache start over.
+pub fn switch_channel(path: String) {
+    let Some(p) = player() else { return };
+    crate::cache::clear();
+    p.switch_channel(path, || {
+        if let Some(ui) = ui() {
+            ui.side.reload();
+            refresh();
+        }
+    });
+}
+
 /* ── Navigation ────────────────────────────────────────────────────────────────── */
 
 pub fn navigate(route: Route) {
@@ -502,6 +625,15 @@ pub fn refresh() {
 }
 
 fn show(ui: &Rc<Ui>, route: &Route) {
+    // The field shows the search on screen, as the mockup's.
+    match route {
+        Route::Search(q) | Route::SearchFilter { query: q, .. } => {
+            if ui.search.text() != q.as_str() {
+                ui.search.set_text(q);
+            }
+        }
+        _ => ui.search.set_text(""),
+    }
     // Signing in stays in front until it's done.
     if !ui.signing_in() {
         ui.top.set_visible_child_name("main");
@@ -554,11 +686,20 @@ pub fn play(item: &Item) {
 
 pub fn open_now(tab: &str) {
     let Some(ui) = ui() else { return };
-    if ui.signing_in() {
+    // Show lyrics when available (Settings → Playback).
+    let lyrics = ui.next.borrow().as_ref().is_some_and(|n| n.lyrics.is_some());
+    let tab = if tab == "queue" && lyrics && prefs::get().show_lyrics { "lyrics" } else { tab };
+    // Nothing playing: Now playing has nothing to show.
+    if ui.signing_in() || player().is_none_or(|p| p.state().track.is_none()) {
         return;
     }
     ui.now.set_tab(tab);
     ui.top.set_visible_child_name("now");
+    ui.collapse.set_visible(true);
+    // The mockup's Now playing has no search in the header.
+    if let Some(field) = ui.search.parent() {
+        field.set_visible(false);
+    }
     ui.header.set_subtitle("Now playing");
 }
 
@@ -568,6 +709,10 @@ pub fn close_now() {
         return;
     }
     ui.top.set_visible_child_name("main");
+    ui.collapse.set_visible(false);
+    if let Some(field) = ui.search.parent() {
+        field.set_visible(true);
+    }
     let route = ui.history.borrow().last().cloned();
     ui.header.set_subtitle(&route.map(|r| r.title()).unwrap_or_default());
 }
@@ -616,6 +761,9 @@ pub fn on_key(key: gdk::Key, mods: gdk::ModifierType) -> glib::Propagation {
             }
         }
         gdk::Key::f if !typing && !ctrl => open_now("queue"),
+        gdk::Key::l if !typing && !ctrl => playerbar::toggle_like(),
+        gdk::Key::q if !typing && !ctrl => open_now("queue"),
+        gdk::Key::m if !typing && !ctrl => u.bar.toggle_mute(),
         gdk::Key::m if ctrl => mini::toggle(),
         gdk::Key::b if ctrl => {
             if let Some(u) = ui() {
@@ -646,6 +794,12 @@ pub fn describe() -> serde_json::Value {
 pub fn dev_signin() {
     if let Some(u) = ui() {
         u.show_signin(true, None);
+    }
+}
+
+pub fn dev_account_menu() {
+    if let Some(u) = ui() {
+        u.side.open_account_menu();
     }
 }
 

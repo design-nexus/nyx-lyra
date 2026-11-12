@@ -2,7 +2,7 @@
 //! when the page's reported state shows it happened; the bridge accepting it isn't enough.
 
 use crate::bridge;
-use crate::playback::{Connection, Playback, Status};
+use crate::playback::{Connection, Playback, Repeat, Status};
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::time::{Duration, Instant};
@@ -15,8 +15,24 @@ pub enum Command {
     Toggle,
     Next,
     Previous,
-    Seek { position: f64 },
-    Volume { level: u8 },
+    Seek {
+        position: f64,
+    },
+    Volume {
+        level: u8,
+    },
+    /// Like the song (`on`) or take the like back, with YouTube Music's own button.
+    Like {
+        on: bool,
+    },
+    /// YouTube Music's Shuffle: it reorders the queue after the song playing.
+    Shuffle,
+    Repeat {
+        mode: Repeat,
+    },
+    Autoplay {
+        on: bool,
+    },
 }
 
 impl Command {
@@ -30,6 +46,10 @@ impl Command {
             Command::Previous => json!({ "cmd": "previous" }),
             Command::Seek { position } => json!({ "cmd": "seek", "position": position }),
             Command::Volume { level } => json!({ "cmd": "volume", "level": level }),
+            Command::Like { on } => json!({ "cmd": "like", "on": on }),
+            Command::Shuffle => json!({ "cmd": "shuffle" }),
+            Command::Repeat { mode } => json!({ "cmd": "repeat", "mode": mode.wire() }),
+            Command::Autoplay { on } => json!({ "cmd": "autoplay", "on": on }),
         }
     }
 
@@ -57,6 +77,23 @@ impl Command {
             }
             Command::Seek { position } => now.position.is_some_and(|p| (p - position).abs() < 2.0),
             Command::Volume { level } => now.volume == Some(*level),
+            Command::Like { on } => now.liked == Some(*on),
+            Command::Repeat { mode } => now.repeat == Some(*mode),
+            Command::Autoplay { on } => now.autoplay == Some(*on),
+            // Confirmed by the bridge's answer instead (see `answered`).
+            Command::Shuffle => false,
+        }
+    }
+
+    /// Whether the state already is what the command asks for.
+    fn already(&self, now: &Playback) -> bool {
+        match self {
+            Command::Pause => !now.is_playing(),
+            Command::Volume { level } => now.volume == Some(*level),
+            Command::Like { on } => now.liked == Some(*on),
+            Command::Repeat { mode } => now.repeat == Some(*mode),
+            Command::Autoplay { on } => now.autoplay == Some(*on),
+            _ => false,
         }
     }
 
@@ -67,6 +104,10 @@ impl Command {
             Command::Next if !now.controls.next => Err(Failure::Unsupported),
             Command::Previous if !now.controls.previous => Err(Failure::Unsupported),
             Command::Seek { .. } if !now.controls.seek => Err(Failure::Unsupported),
+            Command::Like { .. } if now.liked.is_none() => Err(Failure::Unsupported),
+            Command::Repeat { .. } if now.repeat.is_none() => Err(Failure::Unsupported),
+            Command::Autoplay { .. } if now.autoplay.is_none() => Err(Failure::Unsupported),
+            Command::Shuffle if now.track.is_none() => Err(Failure::NoMedia),
             _ => Ok(()),
         }
     }
@@ -147,6 +188,14 @@ impl Coordinator {
     /// The bridge's immediate answer: "session" or "element" mean it was passed on.
     pub fn answered(&mut self, id: CommandId, answer: &str) -> Option<Event> {
         let failure = match answer {
+            // Shuffle shows nowhere in the player bar: YouTube Music's button pressed is all there is.
+            "session" | "element" if self.pending.iter().any(|p| p.id == id && p.command == Command::Shuffle) => {
+                return self.take(id).map(|p| Event::Confirmed { id, command: p.command });
+            }
+            // Already so (Pause on a stopped song): nothing will change to confirm it later.
+            "session" | "element" if self.pending.iter().any(|p| p.id == id && p.command.already(&self.state)) => {
+                return self.take(id).map(|p| Event::Confirmed { id, command: p.command });
+            }
             "session" | "element" => return None,
             "unsupported" => Failure::Unsupported,
             "no-media" => Failure::NoMedia,
@@ -281,6 +330,36 @@ mod tests {
         let events = c.connection(Connection::Reconnecting);
         assert!(events.contains(&Event::Failed { id, command: Command::Play, failure: Failure::Disconnected }));
         assert!(matches!(c.send(Command::Play, t), Send::Failed(Event::Failed { failure: Failure::Disconnected, .. })));
+    }
+
+    #[test]
+    fn like_repeat_autoplay_follow_the_page() {
+        let (mut c, t) = ready();
+        assert!(matches!(
+            c.send(Command::Like { on: true }, t),
+            Send::Failed(Event::Failed { failure: Failure::Unsupported, .. })
+        ));
+        let mut st = s("Midnight City", false, 12.0);
+        st.like = Some("INDIFFERENT".into());
+        st.repeat = Some("NONE".into());
+        st.autoplay = Some(true);
+        c.report(&st);
+        let like = wire(c.send(Command::Like { on: true }, t));
+        let repeat = wire(c.send(Command::Repeat { mode: Repeat::All }, t));
+        st.like = Some("LIKE".into());
+        let events = c.report(&st);
+        assert!(events.contains(&Event::Confirmed { id: like, command: Command::Like { on: true } }));
+        assert!(!events.iter().any(|e| matches!(e, Event::Confirmed { id, .. } if *id == repeat)));
+        st.repeat = Some("ALL".into());
+        assert!(c.report(&st).contains(&Event::Confirmed { id: repeat, command: Command::Repeat { mode: Repeat::All } }));
+        assert_eq!(Repeat::One.next(), Repeat::Off);
+        let again = wire(c.send(Command::Repeat { mode: Repeat::All }, t));
+        assert_eq!(
+            c.answered(again, "element"),
+            Some(Event::Confirmed { id: again, command: Command::Repeat { mode: Repeat::All } })
+        );
+        let shuffle = wire(c.send(Command::Shuffle, t));
+        assert_eq!(c.answered(shuffle, "element"), Some(Event::Confirmed { id: shuffle, command: Command::Shuffle }));
     }
 
     #[test]

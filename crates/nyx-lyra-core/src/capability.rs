@@ -62,7 +62,11 @@ pub fn availability(c: Capability, now: &Playback) -> Availability {
         Album => Unofficial,
         Search | Home | Library | LikedMusic | Playlists | Artists | Albums | Explore => Unofficial,
         Queue | Lyrics => Unofficial,
-        Shuffle | Repeat | Like | EditPlaylists => NotYet,
+        Like if ready && now.liked.is_some() => Available,
+        Repeat if ready && now.repeat.is_some() => Available,
+        Shuffle if ready && now.track.is_some() => Available,
+        Like | Repeat | Shuffle => Unavailable("YouTube Music shows no player for this yet"),
+        EditPlaylists => Unofficial,
         SignedOutPlayback => Unavailable("YouTube Music asks to sign in before it plays anything"),
     }
 }

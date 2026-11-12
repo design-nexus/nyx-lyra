@@ -25,10 +25,10 @@ pub fn description(app_id: &str) -> Value {
              "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}, "playlist": {"type": "string"}}, "additionalProperties": false},
              "annotations": {"title": "Play on YouTube Music"}, "x-nyx": {"risk": "writes", "confirmation": "never", "positional": ["query"], "result": "object"}},
             {"name": "lyra.control", "description": "Play, pause, toggle, next or previous in Lyra. Answers once YouTube Music confirms it.",
-             "inputSchema": {"type": "object", "properties": {"action": {"enum": ["play", "pause", "toggle", "next", "previous"]}}, "required": ["action"], "additionalProperties": false},
+             "inputSchema": {"type": "object", "properties": {"action": {"enum": ["play", "pause", "toggle", "next", "previous", "like", "unlike", "shuffle", "repeat", "repeat-one", "repeat-off"]}}, "required": ["action"], "additionalProperties": false},
              "annotations": {"title": "Playback control"},
              "x-nyx": {"risk": "writes", "confirmation": "never", "positional": ["action"], "result": "object",
-                       "aliases": [alias("pause", "pause"), alias("resume", "play"), alias("toggle", "toggle"), alias("next", "next"), alias("skip", "next"), alias("previous", "previous"), alias("prev", "previous")]}},
+                       "aliases": [alias("pause", "pause"), alias("resume", "play"), alias("toggle", "toggle"), alias("next", "next"), alias("skip", "next"), alias("previous", "previous"), alias("prev", "previous"), alias("like", "like"), alias("unlike", "unlike"), alias("shuffle", "shuffle"), alias("repeat", "repeat")]}},
             {"name": "lyra.volume", "description": "Set Lyra's volume, 0 to 100.",
              "inputSchema": {"type": "object", "properties": {"level": {"type": "number", "minimum": 0, "maximum": 100}}, "required": ["level"], "additionalProperties": false},
              "annotations": {"title": "Volume"}, "x-nyx": {"risk": "writes", "confirmation": "never", "positional": ["level"], "aliases": ["vol"], "result": "object"}},
@@ -137,6 +137,9 @@ fn playback(s: &Playback) -> Value {
         "can_next": s.controls.next,
         "can_previous": s.controls.previous,
         "signed_in": s.signed_in,
+        "liked": s.liked,
+        "repeat": s.repeat,
+        "autoplay": s.autoplay,
     })
 }
 
@@ -187,6 +190,7 @@ fn summary(i: &Item) -> Value {
         Kind::Ep => "ep",
         Kind::Artist => "artist",
         Kind::Playlist => "playlist",
+        Kind::Link => "page",
         Kind::Other => "other",
     };
     json!({"title": i.title, "subtitle": i.subtitle, "kind": kind, "value": i.title})
@@ -247,6 +251,12 @@ fn handle(app: &gtk::Application, name: &str, args: Value, reply: Reply) {
                 Some("toggle") => Command::Toggle,
                 Some("next") => Command::Next,
                 Some("previous") => Command::Previous,
+                Some("like") => Command::Like { on: true },
+                Some("unlike") => Command::Like { on: false },
+                Some("shuffle") => Command::Shuffle,
+                Some("repeat") => Command::Repeat { mode: nyx_lyra_core::playback::Repeat::All },
+                Some("repeat-one") => Command::Repeat { mode: nyx_lyra_core::playback::Repeat::One },
+                Some("repeat-off") => Command::Repeat { mode: nyx_lyra_core::playback::Repeat::Off },
                 other => return reply(Err(format!("unknown action {}", other.unwrap_or("(none)")))),
             };
             command(app, c, reply)

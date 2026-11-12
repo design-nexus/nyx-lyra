@@ -183,6 +183,7 @@ impl Runtime for WebRuntime {
             Load::Watch { video_id, playlist_id, .. } => valid_id(video_id) && playlist_id.as_deref().is_none_or(valid_id),
             Load::List { playlist_id } => valid_id(playlist_id),
             Load::SignIn { .. } => true,
+            Load::Switch { path } => nyx_lyra_core::youtube::switch_url(path),
         };
         if !ok {
             eprintln!("nyx-lyra: refused to load {target:?}");
@@ -202,6 +203,7 @@ impl Runtime for WebRuntime {
             }
             Load::List { playlist_id } => format!("{HOME}watch?list={playlist_id}"),
             Load::SignIn { email } => sign_in_uri(email.as_deref()),
+            Load::Switch { path } => format!("{}{path}", HOME.trim_end_matches('/')),
         };
         self.view.load_uri(&uri);
     }
@@ -216,6 +218,12 @@ impl Runtime for WebRuntime {
 
     fn terminate(&self) {
         self.view.terminate_web_process();
+    }
+
+    fn dev_eval(&self, script: &str, done: Box<dyn FnOnce(String)>) {
+        self.view.evaluate_javascript(script, None, None, gio::Cancellable::NONE, move |r| {
+            done(r.map(|v| v.to_str().to_string()).unwrap_or_else(|e| e.to_string()))
+        });
     }
 
     fn sign_out(&self, done: Box<dyn FnOnce()>) {

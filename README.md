@@ -29,12 +29,15 @@ YouTube Music doesn't play anything signed out.
 - `crates/nyx-lyra-core`: the bridge script and its protocol, playback state, typed commands
   and their confirmation, capabilities, and YouTube Music's requests and parsers. No GTK.
 - `apps/probe`: the Phase 1 feasibility probe.
-- `tools/`: `headless.sh` starts a test copy on a headless output (`LYRA=app` for Lyra),
+- `tools/`: `headless.sh` starts a test copy on a headless output (`LYRA=app` for Lyra;
+  `LYRA_DATA_HOME=~/.local/share` for the real signed-in profile, with Lyra closed),
+  `compare.sh` puts it beside a mockup shot, `icons.py` makes Lyra's icons from the
+  mockups' icon set,
   `check-app.py` checks Lyra end to end, `drive.py` the probe, `measure.py` and
   `longrun.py` measure them.
 - `docs/`: [Phase 0 audit](docs/phase0-audit.md), [Phase 1 feasibility](docs/phase1-feasibility.md),
   [Phase 2 core](docs/phase2-core.md), [Phases 3 and 4](docs/phase3-4-window.md),
-  [Phase 5 integration](docs/phase5-integration.md).
+  [Phase 5 integration](docs/phase5-integration.md), [against the mockups](docs/mockup-parity.md).
 
 ## License
 

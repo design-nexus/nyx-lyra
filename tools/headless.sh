@@ -60,7 +60,8 @@ for c in json.load(sys.stdin):
 
 [[ $class == LyraProbeTest ]] && rules
 # The real data folder stays on the search path so the icon theme (Umbra) is found.
-env XDG_CONFIG_HOME="$dir/xdg/config" XDG_DATA_HOME="$dir/xdg/data" XDG_CACHE_HOME="$dir/xdg/cache" \
+# LYRA_DATA_HOME=~/.local/share runs on the real web profile (Lyra itself must be closed).
+env XDG_CONFIG_HOME="$dir/xdg/config" XDG_DATA_HOME="${LYRA_DATA_HOME:-$dir/xdg/data}" XDG_CACHE_HOME="$dir/xdg/cache" \
   XDG_DATA_DIRS="$HOME/.local/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}" "${envs[@]}" \
   setsid bash -c "tail -n +1 -f $dir/cmds | exec $bin ${1:-} >$dir/events.log 2>$dir/stderr.log" </dev/null >/dev/null 2>&1 &
 if [[ $class == LyraTest ]]; then

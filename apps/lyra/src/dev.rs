@@ -67,6 +67,16 @@ fn handle(player: &Rc<Player>, app: &gtk::Application, line: &str, start: Instan
         "previous" => Some(Command::Previous),
         "seek" => num("position").map(|p| Command::Seek { position: p }),
         "volume" => num("level").map(|l| Command::Volume { level: l.clamp(0.0, 255.0) as u8 }),
+        "like" => Some(Command::Like { on: c.get("on").and_then(Value::as_bool).unwrap_or(true) }),
+        "shuffle" => Some(Command::Shuffle),
+        "autoplay" => Some(Command::Autoplay { on: c.get("on").and_then(Value::as_bool).unwrap_or(true) }),
+        "repeat" => Some(Command::Repeat {
+            mode: match s("mode").as_str() {
+                "all" => nyx_lyra_core::playback::Repeat::All,
+                "one" => nyx_lyra_core::playback::Repeat::One,
+                _ => nyx_lyra_core::playback::Repeat::Off,
+            },
+        }),
         "state" => return out(json!({ "event": "state", "state": player.state() }), start),
         "mute" => return player.set_muted(true),
         "crash" => return player.terminate(),
@@ -77,6 +87,7 @@ fn handle(player: &Rc<Player>, app: &gtk::Application, line: &str, start: Instan
                 "explore" => Route::Explore,
                 "search" => Route::Search(s("query")),
                 "liked" => Route::Liked,
+                "history" => Route::History,
                 "library" => Route::Library(match s("tab").as_str() {
                     "albums" => Tab::Albums,
                     "artists" => Tab::Artists,
@@ -95,6 +106,26 @@ fn handle(player: &Rc<Player>, app: &gtk::Application, line: &str, start: Instan
         "signin" => return crate::ui::dev_signin(),
         "not-now" => return crate::ui::dev_decline(),
         "settings" => return crate::ui::dev_settings(),
+        "close-settings" => return nyx_ui::settings_card::close(),
+        "account-menu" => return crate::ui::dev_account_menu(),
+        // What YouTube Music's own player bar has (for the bridge's selectors).
+        "dom" => {
+            return player.dev_eval(DOM_PROBE, Box::new(move |r| out(json!({ "event": "dom", "result": r }), start)));
+        }
+        // Switch to the channel already active: the whole switch, without changing it.
+        "switch-same" => {
+            return player.request(
+                &youtube::accounts_list(),
+                Box::new(move |r| {
+                    let path = r.ok().and_then(|v| youtube::channels(&v).into_iter().find(|c| c.selected)).and_then(|c| c.switch);
+                    let found = path.is_some();
+                    if let Some(path) = path {
+                        crate::ui::switch_channel(path);
+                    }
+                    out(json!({ "event": "switch-same", "found": found }), start)
+                }),
+            );
+        }
         "sign-out" => return player.sign_out(),
         "accounts" => {
             return crate::accounts::google_email(move |email| {
@@ -127,10 +158,13 @@ fn handle(player: &Rc<Player>, app: &gtk::Application, line: &str, start: Instan
             return out(json!({ "event": "watch", "loading": ok }), start);
         }
         "quit" => return app.quit(),
-        "search" | "browse" | "up-next" | "more" => {
+        "search" | "browse" | "browse-with" | "account" | "channels" | "up-next" | "more" => {
             let req = match s("cmd").as_str() {
                 "search" => youtube::search(&s("query")),
                 "browse" => youtube::browse(&s("id")),
+                "browse-with" => youtube::browse_with(&s("id"), &s("params")),
+                "account" => Some(youtube::account_menu()),
+                "channels" => Some(youtube::accounts_list()),
                 "more" => youtube::more(&s("token")),
                 _ => youtube::up_next(&s("video"), None),
             };
@@ -175,3 +209,20 @@ fn handle(player: &Rc<Player>, app: &gtk::Application, line: &str, start: Instan
         ),
     }
 }
+
+const DOM_PROBE: &str = r#"(() => {
+  const bar = document.querySelector("ytmusic-player-bar");
+  const out = { bar: !!bar };
+  if (bar) {
+    out.attrs = [...bar.attributes].map((a) => a.name + "=" + a.value.slice(0, 40));
+    const like = bar.querySelector("ytmusic-like-button-renderer");
+    out.like = like ? [...like.attributes].map((a) => a.name + "=" + a.value.slice(0, 30)) : null;
+    out.likeButtons = like ? [...like.querySelectorAll("button, [aria-pressed]")].map((e) => e.tagName + "|" + (e.closest("[id]") || {}).id + "|" + e.getAttribute("aria-label") + "|" + e.getAttribute("aria-pressed")) : null;
+    out.buttons = [...bar.querySelectorAll("[aria-label],[title]")]
+      .map((e) => e.tagName + "|" + String(e.className).slice(0, 50) + "|" + (e.getAttribute("aria-label") || e.getAttribute("title")) + "|" + (e.getAttribute("aria-pressed") || ""))
+      .slice(0, 60);
+  }
+  out.toggles = [...document.querySelectorAll("tp-yt-paper-toggle-button, #automix, [role=switch]")]
+    .map((e) => e.tagName + "|" + e.id + "|" + e.getAttribute("aria-pressed") + "|" + e.getAttribute("aria-label") + "|" + e.hasAttribute("checked"));
+  return JSON.stringify(out);
+})()"#;

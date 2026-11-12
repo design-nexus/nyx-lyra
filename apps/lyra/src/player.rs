@@ -54,6 +54,8 @@ pub struct Player {
     /// Lyra loaded a page whose bridge hasn't reported yet (`hello` once it started).
     loading: Cell<bool>,
     hello: Cell<bool>,
+    /// Called once when the page Lyra loaded next is ready.
+    on_ready: RefCell<Vec<Box<dyn FnOnce()>>>,
 }
 
 /// In WebKitGTK 2.54, the first song a new web process plays often fails: the audio branch
@@ -81,6 +83,7 @@ impl Player {
             page: Cell::new(0),
             loading: Cell::new(false),
             hello: Cell::new(false),
+            on_ready: RefCell::default(),
         })
     }
 
@@ -363,6 +366,22 @@ impl Player {
         }
     }
 
+    /// Make another channel the active one (YouTube Music's own sign-in address for it);
+    /// `then` runs once the page is back.
+    pub fn switch_channel(&self, path: String, then: impl FnOnce() + 'static) {
+        let Some(rt) = self.runtime() else { return };
+        self.on_ready.borrow_mut().push(Box::new(then));
+        self.load_page(&rt, Load::Switch { path });
+    }
+
+    /// The dev channel's fixed page probes.
+    pub fn dev_eval(&self, script: &str, done: Box<dyn FnOnce(String)>) {
+        match self.runtime() {
+            Some(rt) => rt.dev_eval(script, done),
+            None => done("no runtime".into()),
+        }
+    }
+
     /// YouTube Music's Home in the page (after leaving Google's sign-in page).
     pub fn home(&self) {
         if let Some(rt) = self.runtime() {
@@ -417,6 +436,8 @@ impl Player {
                 self.emit(events);
                 if self.loading.get() && self.hello.get() {
                     self.loading.set(false);
+                    let ready = std::mem::take(&mut *self.on_ready.borrow_mut());
+                    ready.into_iter().for_each(|f| f());
                 }
                 self.send_pending();
                 self.finish_resume(&now);

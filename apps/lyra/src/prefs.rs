@@ -18,6 +18,12 @@ pub struct Prefs {
     /// The now-playing column beside the pages (direction A).
     pub show_column: bool,
     pub recent_searches: Vec<String>,
+    /// The library as a list instead of tiles.
+    pub library_list: bool,
+    /// Now playing opens on Lyrics when YouTube Music has them.
+    pub show_lyrics: bool,
+    /// A notification when the song changes while Lyra isn't in front.
+    pub notify: bool,
 }
 
 impl Default for Prefs {
@@ -31,6 +37,9 @@ impl Default for Prefs {
             keep_playing: true,
             show_column: true,
             recent_searches: Vec::new(),
+            library_list: false,
+            show_lyrics: true,
+            notify: false,
         }
     }
 }

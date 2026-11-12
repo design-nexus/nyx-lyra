@@ -38,6 +38,12 @@ pub struct State {
     pub list: Option<String>,
     /// Whether the page has a signed-in session (only the answer leaves the page).
     pub signed: Option<bool>,
+    /// The song's like status in YouTube Music's player bar: "LIKE", "INDIFFERENT", "DISLIKE".
+    pub like: Option<String>,
+    /// The player bar's repeat mode: "NONE", "ALL", "ONE".
+    pub repeat: Option<String>,
+    /// The queue's Autoplay switch.
+    pub autoplay: Option<bool>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -78,6 +84,8 @@ fn clean(s: &mut State) {
         *t = t.take().map(|x| text(&x)).filter(|x| !x.is_empty());
     }
     s.artwork = s.artwork.take().filter(|u| u.len() <= 2048 && u.starts_with("https://"));
+    s.like = s.like.take().filter(|l| ["LIKE", "INDIFFERENT", "DISLIKE"].contains(&l.as_str()));
+    s.repeat = s.repeat.take().filter(|r| ["NONE", "ALL", "ONE"].contains(&r.as_str()));
     for id in [&mut s.video, &mut s.list] {
         *id = id.take().filter(|v| crate::youtube::valid_id(v));
     }

@@ -1,13 +1,14 @@
 //! MPRIS (org.mpris.MediaPlayer2): media keys, the bar, Control Center and the dock. The
 //! D-Bus side runs on its own thread with zbus' blocking API, reads a snapshot the GTK
 //! thread keeps current, and sends commands back; every command goes through the player,
-//! which only reports what YouTube Music confirms. Shuffle and repeat aren't offered: the
-//! page doesn't expose them.
+//! which only reports what YouTube Music confirms. LoopStatus follows YouTube Music's repeat;
+//! Shuffle is an action there (it reorders the queue once), so it reads false and setting it
+//! shuffles.
 
 use crate::{APP_ID, art, player};
 use gtk::{glib, prelude::*};
 use nyx_lyra_core::command::{Command, Event};
-use nyx_lyra_core::playback::{Connection, Playback, Status};
+use nyx_lyra_core::playback::{Connection, Playback, Repeat, Status};
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -32,6 +33,8 @@ enum Do {
     /// Absolute, in microseconds, for the given track ID.
     SetPosition(String, i64),
     Volume(f64),
+    Loop(Repeat),
+    Shuffle,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -55,6 +58,8 @@ struct Snapshot {
     can_previous: bool,
     can_play: bool,
     can_seek: bool,
+    /// "None", "Playlist" or "Track".
+    loop_status: &'static str,
     meta: Option<Meta>,
 }
 
@@ -69,6 +74,7 @@ impl Default for Snapshot {
             can_previous: false,
             can_play: false,
             can_seek: false,
+            loop_status: "None",
             meta: None,
         }
     }
@@ -126,6 +132,11 @@ fn snapshot(s: &Playback) -> Snapshot {
         can_previous: ready && s.controls.previous,
         can_play: ready && s.track.is_some(),
         can_seek: ready && s.controls.seek,
+        loop_status: match s.repeat {
+            Some(Repeat::All) => "Playlist",
+            Some(Repeat::One) => "Track",
+            _ => "None",
+        },
         meta,
     }
 }
@@ -303,6 +314,33 @@ impl Player {
         self.send(Do::Volume(value));
     }
 
+    #[zbus(property)]
+    fn loop_status(&self) -> String {
+        self.snap().loop_status.into()
+    }
+
+    #[zbus(property)]
+    fn set_loop_status(&mut self, value: String) {
+        let mode = match value.as_str() {
+            "Playlist" => Repeat::All,
+            "Track" => Repeat::One,
+            _ => Repeat::Off,
+        };
+        self.send(Do::Loop(mode));
+    }
+
+    #[zbus(property)]
+    fn shuffle(&self) -> bool {
+        false
+    }
+
+    #[zbus(property)]
+    fn set_shuffle(&mut self, value: bool) {
+        if value {
+            self.send(Do::Shuffle);
+        }
+    }
+
     #[zbus(property(emits_changed_signal = "false"))]
     fn position(&self) -> i64 {
         self.snap().position()
@@ -381,6 +419,7 @@ fn serve(
                                 guard.can_pause_changed(emitter).await?
                             }
                             "CanSeek" => guard.can_seek_changed(emitter).await?,
+                            "LoopStatus" => guard.loop_status_changed(emitter).await?,
                             _ => {}
                         }
                     }
@@ -430,6 +469,12 @@ fn handle(app: &gtk::Application, c: Do) {
         }
         Do::Volume(v) => {
             p.send(Command::Volume { level: (v.clamp(0.0, 1.0) * 100.0).round() as u8 });
+        }
+        Do::Loop(mode) => {
+            p.send(Command::Repeat { mode });
+        }
+        Do::Shuffle => {
+            p.send(Command::Shuffle);
         }
     }
 }
@@ -489,6 +534,9 @@ pub fn start(app: &gtk::Application) {
             }
             if prev.meta != now.meta {
                 changed.push("Metadata");
+            }
+            if prev.loop_status != now.loop_status {
+                changed.push("LoopStatus");
             }
         }
         // A jump the clock didn't account for is a seek.
