@@ -180,14 +180,10 @@ pub fn build(app: &gtk::Application, web: &gtk::Widget) -> gtk::ApplicationWindo
     pages.set_transition_duration(if prefs::get().reduce_motion { 0 } else { 120 });
     let bar = playerbar::Bar::new();
 
-    let body = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    body.set_vexpand(true);
-    body.append(&side.side.root);
-    body.append(&column.root);
-    body.append(&pages);
-    let main = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    main.append(&body);
-    main.append(&bar.root);
+    let main = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    main.set_vexpand(true);
+    main.append(&column.root);
+    main.append(&pages);
 
     let now = expanded::Expanded::new();
     let signin = Signin::new();
@@ -197,11 +193,22 @@ pub fn build(app: &gtk::Application, web: &gtk::Widget) -> gtk::ApplicationWindo
     top.add_named(&main, Some("main"));
     top.add_named(&now.root, Some("now"));
     top.add_named(&signin.root, Some("signin"));
+    // Sized by the page showing: Now playing is taller than the library, which shares
+    // the window's height with the player bar.
+    top.set_vhomogeneous(false);
+    // The sidebar and player bar go with the library; Now playing and signing in
+    // take the whole sheet.
+    let (side_root, bar_root) = (side.side.root.clone(), bar.root.clone());
+    top.connect_visible_child_name_notify(move |top| {
+        let library = top.visible_child_name().as_deref() == Some("main");
+        side_root.set_visible(library);
+        bar_root.set_visible(library);
+    });
 
-    let frame = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    frame.add_css_class("window-frame");
-    frame.append(&header.root);
-    frame.append(&top);
+    let frame = nyx_ui::frame::AppFrame::new(&header.root);
+    frame.set_sidebar(&side.side.root);
+    frame.set_page(&top);
+    frame.set_foot(&bar.root);
     // YouTube Music's page sits full size beneath the native window, which covers it: the
     // web player only plays in a shown page of a real size (a small or hidden one stalls).
     let overlay = gtk::Overlay::new();
@@ -211,8 +218,8 @@ pub fn build(app: &gtk::Application, web: &gtk::Widget) -> gtk::ApplicationWindo
     web.set_vexpand(true);
     web_hidden.append(web);
     overlay.set_child(Some(&web_hidden));
-    frame.add_css_class("background");
-    overlay.add_overlay(&frame);
+    frame.root.add_css_class("background");
+    overlay.add_overlay(&frame.root);
     window.set_child(Some(&overlay));
 
     let this = Rc::new(Ui {
