@@ -183,6 +183,10 @@ pub fn build(app: &gtk::Application, web: &gtk::Widget) -> gtk::ApplicationWindo
     let main = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     main.set_vexpand(true);
     main.append(&column.root);
+    // The line between the now-playing column and the pages, shown with the column.
+    let column_line = nyx_ui::frame::pane_line(gtk::Orientation::Vertical);
+    column.root.bind_property("visible", &column_line, "visible").sync_create().build();
+    main.append(&column_line);
     main.append(&pages);
 
     let now = expanded::Expanded::new();
