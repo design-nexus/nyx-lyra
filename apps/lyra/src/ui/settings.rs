@@ -118,7 +118,7 @@ fn account_row() -> gtk::Box {
         });
         widgets::row(
             "YouTube Music account",
-            "Signed in. Signing out forgets the session in Lyra; your Google account and Online Accounts stay as they are.",
+            "Signed in. Like a browser, Lyra keeps the Google session in its own folder (~/.local/share/nyx-lyra), readable by your programs and copied by backups of your home folder. Signing out forgets it; your Google account and Online Accounts stay as they are.",
             Some(out.upcast_ref()),
         )
     } else {
