@@ -39,6 +39,8 @@ impl Side {
             add(Route::Search(String::new()), "search", "Search", "Search (Ctrl+F)"),
         ];
         let (library_head, library_toggle) = collapsible_group("Your library");
+        // The first group in the app's accent, the others from the theme's [sections.lyra].
+        sidebar::set_section(&library_head, sidebar::ACCENT_SECTION);
         side.append(&library_head);
         let library = gtk::Box::new(gtk::Orientation::Vertical, 1);
         side.append(&library);
@@ -61,7 +63,9 @@ impl Side {
             lib_box.set_visible(open);
             b.set_icon_name(if open { "lyra-chev-d-symbolic" } else { "lyra-chev-r-symbolic" });
         });
-        side.append(&sidebar::group_label_with_add("Playlists", false, "New playlist", super::new_playlist));
+        let playlists_head = sidebar::group_label_with_add("Playlists", false, "New playlist", super::new_playlist);
+        sidebar::set_section(&playlists_head, "playlists");
+        side.append(&playlists_head);
         let all_playlists = Rc::new(sidebar::nav_item("lyra-list-symbolic", "All playlists", "Every playlist in your library"));
         all_playlists.button.connect_clicked(|_| navigate(Route::Library(Tab::Playlists)));
         side.append(&all_playlists.button);
