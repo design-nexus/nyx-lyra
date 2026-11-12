@@ -64,11 +64,28 @@ The `nyx-apps` ability (1.7.0) has `lyra.play`, `lyra.control`, `lyra.volume`,
 `lyra.status`, `lyra.search`, `lyra.playlists` and `lyra.open`, and answers "what's playing
 in Lyra" without the model.
 
-## Background
+## Closing and the mini-player
 
-Closing the window while music plays hides it and keeps playing (Settings → Playback,
-on by default); the mini-player, media keys, the bar and `nyx lyra` reach it. Opening Lyra
-again shows the same window.
+Closing Lyra quits it and stops the music: its web process and its MPRIS player end, so
+the bar and Control Center drop it at once. (Hiding the window instead, as Lyra first did,
+let WebKit throttle the page: the song playing ran out and the next never loaded.)
+
+The mini-player does hide the main window. The bridge keeps the page counting as seen
+(`document.hidden` false), and YouTube Music plays on across songs with every control
+confirmed; WebKitGTK 2.54 offers apps none of its own hidden-page throttling switches.
+
+## Audio quality and the equalizer
+
+Lyra keeps the account's Audio quality (YouTube Music's own setting, `account/set_setting`)
+at the highest option YouTube Music offers it, unless another is picked in Settings →
+Playback. With Premium that is High: the stream is AAC at 256 kbps (`141`), where Normal
+played Opus at about 160 kbps (`251`).
+
+Settings → Equalizer is Nyx Music's: a preamp and ten bands (31 Hz to 16 kHz, ±12 dB)
+with its presets and saved presets. It runs in the page: the bridge routes YouTube Music's
+media element through Web Audio (a gain, ten peaking filters), built the first time it's
+turned on and sent again with each new page. Checked by its output level: flat about 0.1,
+all bands +12 dB about 3, all −12 dB about 0.005, playback going on across a song change.
 
 ## Checked
 

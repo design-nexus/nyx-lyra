@@ -25,6 +25,11 @@ const HOSTS: &[&str] = &[
     "gds.google.com",
 ];
 const MAX_ENDS: usize = 3;
+const UNTHROTTLED: &[&str] = &[
+    "HiddenPageDOMTimerThrottlingEnabled",
+    "HiddenPageCSSAnimationSuspensionEnabled",
+    "PageVisibilityBasedProcessSuppressionEnabled",
+];
 const SIGN_IN: &str = "https://accounts.google.com/ServiceLogin?ltmpl=music&service=youtube&passive=true&continue=https%3A%2F%2Fwww.youtube.com%2Fsignin%3Faction_handle_signin%3Dtrue%26app%3Ddesktop%26next%3Dhttps%253A%252F%252Fmusic.youtube.com%252F";
 
 pub struct WebRuntime {
@@ -62,6 +67,21 @@ impl WebRuntime {
         // Old pages kept for Back each hold a web process; Lyra never goes back in the page.
         settings.set_enable_page_cache(false);
         settings.set_enable_developer_extras(std::env::var_os("NYX_LYRA_INSPECTOR").is_some());
+        // The mini-player hides the window the page lives in; a hidden page is throttled
+        // and YouTube Music stops between songs. These keep it running unseen.
+        let mut off = Vec::new();
+        if let Some(features) = webkit6::Settings::all_features() {
+            for f in (0..features.length()).filter_map(|i| features.get(i)) {
+                let Some(id) = f.identifier() else { continue };
+                if UNTHROTTLED.contains(&id.as_str()) {
+                    settings.set_feature_enabled(&f, false);
+                    off.push(id.to_string());
+                }
+            }
+        }
+        if off.len() < UNTHROTTLED.len() {
+            eprintln!("nyx-lyra: of WebKit's hidden-page throttling, only {off:?} could be turned off");
+        }
 
         let content = webkit6::UserContentManager::new();
         content.register_script_message_handler("lyra", None);
@@ -222,6 +242,13 @@ impl Runtime for WebRuntime {
 
     fn dev_eval(&self, script: &str, done: Box<dyn FnOnce(String)>) {
         self.view.evaluate_javascript(script, None, None, gio::Cancellable::NONE, move |r| {
+            done(r.map(|v| v.to_str().to_string()).unwrap_or_else(|e| e.to_string()))
+        });
+    }
+
+    fn dev_eval_async(&self, script: &str, done: Box<dyn FnOnce(String)>) {
+        let body = format!("return await {script};");
+        self.view.call_async_javascript_function(&body, None, None, None, gio::Cancellable::NONE, move |r| {
             done(r.map(|v| v.to_str().to_string()).unwrap_or_else(|e| e.to_string()))
         });
     }

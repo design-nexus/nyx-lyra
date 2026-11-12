@@ -89,4 +89,5 @@ pub trait Runtime {
     fn sign_out(&self, done: Box<dyn FnOnce()>);
     /// For the dev channel's fixed page probes only.
     fn dev_eval(&self, script: &str, done: Box<dyn FnOnce(String)>);
+    fn dev_eval_async(&self, script: &str, done: Box<dyn FnOnce(String)>);
 }

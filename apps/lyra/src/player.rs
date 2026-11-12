@@ -374,6 +374,14 @@ impl Player {
         self.load_page(&rt, Load::Switch { path });
     }
 
+    /// The dev channel's fixed page probes that wait (an async function's result).
+    pub fn dev_eval_async(&self, script: &str, done: Box<dyn FnOnce(String)>) {
+        match self.runtime() {
+            Some(rt) => rt.dev_eval_async(script, done),
+            None => done("no runtime".into()),
+        }
+    }
+
     /// The dev channel's fixed page probes.
     pub fn dev_eval(&self, script: &str, done: Box<dyn FnOnce(String)>) {
         match self.runtime() {
@@ -436,6 +444,10 @@ impl Player {
                 self.emit(events);
                 if self.loading.get() && self.hello.get() {
                     self.loading.set(false);
+                    // A new page starts without the equalizer.
+                    if crate::prefs::get().eq_enabled {
+                        glib::idle_add_local_once(crate::eq::apply);
+                    }
                     let ready = std::mem::take(&mut *self.on_ready.borrow_mut());
                     ready.into_iter().for_each(|f| f());
                 }

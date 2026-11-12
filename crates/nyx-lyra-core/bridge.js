@@ -10,6 +10,14 @@
     } catch (_) {}
   };
 
+  // The page always counts as seen: the mini-player hides the window it lives in, and
+  // YouTube Music idles (and stops between songs) on a page it thinks is hidden.
+  try {
+    Object.defineProperty(Document.prototype, "hidden", { configurable: true, get: () => false });
+    Object.defineProperty(Document.prototype, "visibilityState", { configurable: true, get: () => "visible" });
+    document.addEventListener("visibilitychange", (e) => e.stopImmediatePropagation(), true);
+  } catch (_) {}
+
   // The page's own Media Session handlers are what its media keys would call.
   const handlers = new Map();
   const ms = navigator.mediaSession;
@@ -99,6 +107,47 @@
     fn({ action: name, ...details });
     return true;
   };
+  // The equalizer: the media element through a preamp and ten peaking bands (Nyx Music's),
+  // built the first time it's turned on; off, it stays built but flat.
+  const EQ_BANDS = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+  let eqWant = null;
+  let eqGraph = null;
+  const eqApply = () => {
+    const m = media();
+    if (!eqWant || !m || (!eqWant.on && !eqGraph)) return;
+    if (!eqGraph || eqGraph.el !== m) {
+      try {
+        const ctx = new AudioContext();
+        const pre = ctx.createGain();
+        const bands = EQ_BANDS.map((f) => {
+          const b = ctx.createBiquadFilter();
+          b.type = "peaking";
+          b.frequency.value = f;
+          b.Q.value = 1.41;
+          return b;
+        });
+        const level = ctx.createAnalyser();
+        ctx.createMediaElementSource(m).connect(pre);
+        bands.reduce((a, b) => (a.connect(b), b), pre).connect(level);
+        level.connect(ctx.destination);
+        eqGraph = { el: m, ctx, pre, bands, level };
+      } catch (_) {
+        return;
+      }
+    }
+    eqGraph.pre.gain.value = eqWant.on ? Math.pow(10, eqWant.preamp / 20) : 1;
+    eqGraph.bands.forEach((b, i) => (b.gain.value = eqWant.on ? eqWant.bands[i] : 0));
+    if (eqGraph.ctx.state === "suspended") eqGraph.ctx.resume();
+  };
+  for (const ev of ["play", "playing", "loadedmetadata"]) document.addEventListener(ev, eqApply, true);
+  // For the checks: how loud the equalizer's output is (RMS, 0 to 1), or null before it's built.
+  window.__lyraEqLevel = () => {
+    if (!eqGraph) return null;
+    const a = new Float32Array(eqGraph.level.fftSize);
+    eqGraph.level.getFloatTimeDomainData(a);
+    return Math.sqrt(a.reduce((s, x) => s + x * x, 0) / a.length);
+  };
+
   const command = (c) => {
     const m = media();
     switch (c && c.cmd) {
@@ -157,6 +206,14 @@
         if (a.hasAttribute("checked") !== !!c.on) a.click();
         return "element";
       }
+      case "eq": {
+        const ok = (v) => typeof v === "number" && isFinite(v) && v >= -12 && v <= 12;
+        if (!c || typeof c.on !== "boolean" || !ok(c.preamp) || !Array.isArray(c.bands) || c.bands.length !== 10 || !c.bands.every(ok))
+          return "bad-argument";
+        eqWant = { on: c.on, preamp: c.preamp, bands: c.bands.slice() };
+        eqApply();
+        return "element";
+      }
       case "volume": {
         const v = Number(c.level);
         if (!isFinite(v) || v < 0 || v > 100) return "bad-argument";
@@ -172,7 +229,7 @@
 
   // The web client's own data requests, made from this page the way it makes them: its
   // context from ytcfg, and its signed-in header unless auth is false. Only these endpoints.
-  const ENDPOINTS = new Set(["search", "browse", "next", "account/account_menu", "account/accounts_list", "playlist/create", "subscription/subscribe", "subscription/unsubscribe", "like/like", "like/removelike"]);
+  const ENDPOINTS = new Set(["search", "browse", "next", "account/account_menu", "account/accounts_list", "playlist/create", "subscription/subscribe", "subscription/unsubscribe", "like/like", "like/removelike", "account/get_setting", "account/set_setting"]);
   const cfg = (k) => (window.ytcfg && window.ytcfg.get ? window.ytcfg.get(k) : undefined);
   const sha1 = async (s) =>
     [...new Uint8Array(await crypto.subtle.digest("SHA-1", new TextEncoder().encode(s)))].map((b) => b.toString(16).padStart(2, "0")).join("");

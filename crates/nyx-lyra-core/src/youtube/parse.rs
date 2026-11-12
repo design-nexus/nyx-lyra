@@ -811,3 +811,43 @@ fn collect_channels(v: &Value, out: &mut Vec<Channel>) {
         _ => {}
     }
 }
+
+/* ── Audio quality ─────────────────────────────────────────────────────────────── */
+
+/// The account's Audio quality setting (YouTube Music's Settings dialog): its ID and its
+/// options as (name, value), lowest first, with the one in use.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AudioQuality {
+    pub item: String,
+    pub options: Vec<(String, String)>,
+    pub selected: Option<String>,
+}
+
+impl AudioQuality {
+    /// The highest option YouTube Music offers this account.
+    pub fn highest(&self) -> Option<&(String, String)> {
+        self.options.last()
+    }
+}
+
+pub fn audio_quality(v: &Value) -> Option<AudioQuality> {
+    let mut menus = Vec::new();
+    all(v, "settingSingleOptionMenuRenderer", &mut menus);
+    let menu = menus.into_iter().find(|m| str_at(m, "/itemId") == Some("MUSIC_WEB_AUDIO_QUALITY"))?;
+    let mut item = None;
+    let mut selected = None;
+    let mut options: Vec<(u32, String, String)> = Vec::new();
+    for o in menu.get("items").and_then(Value::as_array).into_iter().flatten() {
+        let Some(m) = o.get("settingMenuItemRenderer") else { continue };
+        let ep = m.pointer("/updateServiceEndpoint/setSettingEndpoint");
+        let value = ep.and_then(|e| str_at(e, "/intValue")).filter(|v| v.bytes().all(|b| b.is_ascii_digit()));
+        let (Some(value), Some(name)) = (value, m.get("name").and_then(Value::as_str)) else { continue };
+        item = item.or_else(|| ep.and_then(|e| str_at(e, "/settingItemId")).map(String::from));
+        if m.get("selected").and_then(Value::as_bool) == Some(true) {
+            selected = Some(value.to_string());
+        }
+        options.push((value.parse().unwrap_or(0), name.to_string(), value.to_string()));
+    }
+    options.sort_by_key(|o| o.0);
+    Some(AudioQuality { item: item?, options: options.into_iter().map(|(_, n, v)| (n, v)).collect(), selected })
+}

@@ -13,8 +13,6 @@ pub struct Prefs {
     pub glow: bool,
     /// The sidebar shows only icons, whatever the window width.
     pub sidebar_collapsed: bool,
-    /// Closing the window while music plays hides it; the music keeps going.
-    pub keep_playing: bool,
     /// The now-playing column beside the pages (direction A).
     pub show_column: bool,
     pub recent_searches: Vec<String>,
@@ -24,6 +22,21 @@ pub struct Prefs {
     pub show_lyrics: bool,
     /// A notification when the song changes while Lyra isn't in front.
     pub notify: bool,
+    /// YouTube Music's audio quality option picked in Settings; none keeps the highest.
+    pub audio_quality: Option<String>,
+    /// The equalizer (Settings → Equalizer), as Nyx Music's.
+    pub eq_enabled: bool,
+    pub eq_preamp: f64,
+    pub eq_bands: [f64; 10],
+    pub eq_custom: Vec<EqPreset>,
+}
+
+/// A saved equalizer shape.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EqPreset {
+    pub name: String,
+    pub preamp: f64,
+    pub bands: [f64; 10],
 }
 
 impl Default for Prefs {
@@ -34,12 +47,16 @@ impl Default for Prefs {
             reduce_motion: false,
             glow: true,
             sidebar_collapsed: false,
-            keep_playing: true,
             show_column: true,
             recent_searches: Vec::new(),
             library_list: false,
             show_lyrics: true,
             notify: false,
+            audio_quality: None,
+            eq_enabled: false,
+            eq_preamp: 0.0,
+            eq_bands: [0.0; 10],
+            eq_custom: Vec::new(),
         }
     }
 }

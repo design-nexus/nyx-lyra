@@ -69,6 +69,23 @@ fn handle(player: &Rc<Player>, app: &gtk::Application, line: &str, start: Instan
         "volume" => num("level").map(|l| Command::Volume { level: l.clamp(0.0, 255.0) as u8 }),
         "like" => Some(Command::Like { on: c.get("on").and_then(Value::as_bool).unwrap_or(true) }),
         "shuffle" => Some(Command::Shuffle),
+        "eq" => {
+            let mut bands = [0.0; 10];
+            for (i, b) in c.get("bands").and_then(Value::as_array).into_iter().flatten().take(10).enumerate() {
+                bands[i] = b.as_f64().unwrap_or(0.0);
+            }
+            Some(Command::Eq {
+                on: c.get("on").and_then(Value::as_bool).unwrap_or(true),
+                preamp: num("preamp").unwrap_or(0.0),
+                bands,
+            })
+        }
+        "eq-level" => {
+            return player.dev_eval(
+                "JSON.stringify(window.__lyraEqLevel ? window.__lyraEqLevel() : 'no bridge')",
+                Box::new(move |r| out(json!({ "event": "eq-level", "level": r }), start)),
+            );
+        }
         "autoplay" => Some(Command::Autoplay { on: c.get("on").and_then(Value::as_bool).unwrap_or(true) }),
         "repeat" => Some(Command::Repeat {
             mode: match s("mode").as_str() {
@@ -107,7 +124,21 @@ fn handle(player: &Rc<Player>, app: &gtk::Application, line: &str, start: Instan
         "not-now" => return crate::ui::dev_decline(),
         "settings" => return crate::ui::dev_settings(),
         "close-settings" => return nyx_ui::settings_card::close(),
+        "settings-group" => return nyx_ui::settings_card::select(&s("name")),
         "account-menu" => return crate::ui::dev_account_menu(),
+        "script-probe" => {
+            return player
+                .dev_eval_async(SCRIPT_PROBE, Box::new(move |r| out(json!({ "event": "script-probe", "result": r }), start)));
+        }
+        // Where YouTube Music keeps its audio quality (for the audio quality work).
+        "quality-probe" => {
+            return player
+                .dev_eval(QUALITY_PROBE, Box::new(move |r| out(json!({ "event": "quality-probe", "result": r }), start)));
+        }
+        // The stream playing and what WebKit can play (for the audio quality checks).
+        "audio" => {
+            return player.dev_eval(AUDIO_PROBE, Box::new(move |r| out(json!({ "event": "audio", "result": r }), start)));
+        }
         // What YouTube Music's own player bar has (for the bridge's selectors).
         "dom" => {
             return player.dev_eval(DOM_PROBE, Box::new(move |r| out(json!({ "event": "dom", "result": r }), start)));
@@ -158,13 +189,21 @@ fn handle(player: &Rc<Player>, app: &gtk::Application, line: &str, start: Instan
             return out(json!({ "event": "watch", "loading": ok }), start);
         }
         "quit" => return app.quit(),
-        "search" | "browse" | "browse-with" | "account" | "channels" | "up-next" | "more" => {
+        // As closing the window would (its close request).
+        "close-window" => {
+            if let Some(w) = app.windows().into_iter().find(|w| w.has_css_class("lyra-window") && !w.has_css_class("lyra-mini")) {
+                w.close();
+            }
+            return;
+        }
+        "search" | "browse" | "browse-with" | "account" | "channels" | "yt-settings" | "up-next" | "more" => {
             let req = match s("cmd").as_str() {
                 "search" => youtube::search(&s("query")),
                 "browse" => youtube::browse(&s("id")),
                 "browse-with" => youtube::browse_with(&s("id"), &s("params")),
                 "account" => Some(youtube::account_menu()),
                 "channels" => Some(youtube::accounts_list()),
+                "yt-settings" => Some(youtube::settings()),
                 "more" => youtube::more(&s("token")),
                 _ => youtube::up_next(&s("video"), None),
             };
@@ -225,4 +264,38 @@ const DOM_PROBE: &str = r#"(() => {
   out.toggles = [...document.querySelectorAll("tp-yt-paper-toggle-button, #automix, [role=switch]")]
     .map((e) => e.tagName + "|" + e.id + "|" + e.getAttribute("aria-pressed") + "|" + e.getAttribute("aria-label") + "|" + e.hasAttribute("checked"));
   return JSON.stringify(out);
+})()"#;
+
+const AUDIO_PROBE: &str = r#"(() => {
+  const p = document.getElementById("movie_player");
+  const stats = p && p.getStatsForNerds ? p.getStatsForNerds() : null;
+  const pick = (o) => o && Object.fromEntries(Object.entries(o).filter(([k]) => /codec|bitrate|format|audio|quality|bandwidth|loudness|volume/i.test(k)));
+  const types = ['audio/webm; codecs="opus"', 'audio/mp4; codecs="mp4a.40.2"', 'video/webm; codecs="vp9"', 'video/mp4; codecs="avc1.4d401f"'];
+  return JSON.stringify({
+    stats: pick(stats),
+    quality: p && p.getPlaybackQuality ? p.getPlaybackQuality() : null,
+    audioTrack: p && p.getAudioTrack ? String(p.getAudioTrack()) : null,
+    supported: Object.fromEntries(types.map((t) => [t, window.MediaSource ? MediaSource.isTypeSupported(t) : null])),
+  });
+})()"#;
+
+const SCRIPT_PROBE: &str = r#"(async () => {
+  const urls = performance.getEntriesByType("resource").map((e) => e.name).filter((u) => /\.js(\?|$)/.test(u) && /youtube|ytimg|gstatic/.test(u));
+  const out = { scripts: urls.length, values: new Set(), contexts: [] };
+  for (const u of urls) {
+    try {
+      const s = await (await fetch(u)).text();
+      for (const m of s.matchAll(/"[A-Z_]*(AUDIO|QUALITY)[A-Z_]*"/g)) out.values.add(m[0]);
+      for (const m of s.matchAll(/.{0,200}(applicationSettingsEndpoint|account\/get_setting|get_setting_values|settings_dialog|SETTING_ITEM_ID).{0,200}/g)) if (out.contexts.length < 14) out.contexts.push(m[0]);
+    } catch (_) {}
+  }
+  return JSON.stringify({ scripts: out.scripts, values: [...out.values], contexts: out.contexts });
+})()"#;
+
+const QUALITY_PROBE: &str = r#"(() => {
+  const cfg = (window.ytcfg && window.ytcfg.data_) || {};
+  const keys = Object.keys(cfg).filter((k) => /AUDIO|QUALITY|SETTING/i.test(k));
+  const ls = Object.keys(localStorage).filter((k) => /quality|audio|setting|pref/i.test(k));
+  const vals = Object.fromEntries(ls.map((k) => [k, String(localStorage.getItem(k)).slice(0, 300)]));
+  return JSON.stringify({ cfg: Object.fromEntries(keys.map((k) => [k, JSON.stringify(cfg[k]).slice(0, 300)])), localStorage: vals });
 })()"#;

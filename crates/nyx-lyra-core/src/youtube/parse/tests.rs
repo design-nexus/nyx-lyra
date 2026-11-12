@@ -196,6 +196,11 @@ fn real_replies() {
             println!("{name}: signed out");
             continue;
         }
+        if let Some(q) = audio_quality(&v) {
+            println!("{name}: settings, audio quality {:?} of {:?}", q.selected, q.options);
+            assert!(q.highest().is_some());
+            continue;
+        }
         if find(&v, "musicDescriptionShelfRenderer").is_some() && find(&v, "musicResponsiveListItemRenderer").is_none() {
             let l = lyrics(&v).unwrap_or_else(|e| panic!("{name}: {e}"));
             println!("{name}: lyrics, {} lines, {:?}", l.as_ref().map_or(0, |l| l.text.lines().count()), l.map(|l| l.source));
@@ -336,4 +341,22 @@ fn explore_buttons_moods_and_ranks() {
     assert_eq!(p.shelves[1].items[0].params.as_deref(), Some("p1"));
     let song = &p.shelves[2].items[0];
     assert_eq!((song.rank.as_deref(), song.trend), (Some("1"), Some(1)));
+}
+
+#[test]
+fn the_accounts_audio_quality() {
+    let option = |name: &str, value: &str, selected: bool| {
+        json!({ "settingMenuItemRenderer": { "name": name, "selected": selected,
+        "updateServiceEndpoint": { "setSettingEndpoint": { "intValue": value, "settingItemId": "304", "settingItemIdForClient": "MUSIC_WEB_AUDIO_QUALITY" } } } })
+    };
+    let v = json!({ "items": [ { "settingCategoryCollectionRenderer": { "items": [ { "settingSingleOptionMenuRenderer": {
+        "itemId": "MUSIC_WEB_AUDIO_QUALITY",
+        "items": [ option("Normal", "2", true), option("Low", "1", false), option("High", "3", false) ] } } ] } } ] });
+    let q = audio_quality(&v).unwrap();
+    assert_eq!(q.item, "304");
+    assert_eq!(q.selected.as_deref(), Some("2"));
+    assert_eq!(q.highest().map(|(n, v)| (n.as_str(), v.as_str())), Some(("High", "3")));
+    let r = super::super::set_audio_quality(&q.item, "3").unwrap();
+    assert_eq!(r.wire()["body"]["newValue"]["intValue"], "3");
+    assert!(super::super::set_audio_quality("304", "3; drop").is_none());
 }

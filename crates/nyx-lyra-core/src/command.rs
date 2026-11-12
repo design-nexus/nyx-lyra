@@ -33,7 +33,18 @@ pub enum Command {
     Autoplay {
         on: bool,
     },
+    /// The equalizer in the page: a preamp and ten bands (31 Hz to 16 kHz), in dB.
+    Eq {
+        on: bool,
+        preamp: f64,
+        bands: [f64; 10],
+    },
 }
+
+/// The equalizer's bands, as Nyx Music's.
+pub const EQ_BANDS: [f64; 10] = [31.0, 62.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 16000.0];
+/// The faders' range, in dB.
+pub const EQ_RANGE: (f64, f64) = (-12.0, 12.0);
 
 impl Command {
     /// What the bridge's `__lyraCommand` takes.
@@ -50,6 +61,7 @@ impl Command {
             Command::Shuffle => json!({ "cmd": "shuffle" }),
             Command::Repeat { mode } => json!({ "cmd": "repeat", "mode": mode.wire() }),
             Command::Autoplay { on } => json!({ "cmd": "autoplay", "on": on }),
+            Command::Eq { on, preamp, bands } => json!({ "cmd": "eq", "on": on, "preamp": preamp, "bands": bands }),
         }
     }
 
@@ -81,7 +93,7 @@ impl Command {
             Command::Repeat { mode } => now.repeat == Some(*mode),
             Command::Autoplay { on } => now.autoplay == Some(*on),
             // Confirmed by the bridge's answer instead (see `answered`).
-            Command::Shuffle => false,
+            Command::Shuffle | Command::Eq { .. } => false,
         }
     }
 
@@ -108,6 +120,11 @@ impl Command {
             Command::Repeat { .. } if now.repeat.is_none() => Err(Failure::Unsupported),
             Command::Autoplay { .. } if now.autoplay.is_none() => Err(Failure::Unsupported),
             Command::Shuffle if now.track.is_none() => Err(Failure::NoMedia),
+            Command::Eq { preamp, bands, .. }
+                if std::iter::once(preamp).chain(bands).any(|v| !v.is_finite() || *v < EQ_RANGE.0 || *v > EQ_RANGE.1) =>
+            {
+                Err(Failure::BadArgument)
+            }
             _ => Ok(()),
         }
     }
@@ -188,8 +205,10 @@ impl Coordinator {
     /// The bridge's immediate answer: "session" or "element" mean it was passed on.
     pub fn answered(&mut self, id: CommandId, answer: &str) -> Option<Event> {
         let failure = match answer {
-            // Shuffle shows nowhere in the player bar: YouTube Music's button pressed is all there is.
-            "session" | "element" if self.pending.iter().any(|p| p.id == id && p.command == Command::Shuffle) => {
+            // Shuffle and the equalizer show nowhere in the page: taking them is all there is.
+            "session" | "element"
+                if self.pending.iter().any(|p| p.id == id && matches!(p.command, Command::Shuffle | Command::Eq { .. })) =>
+            {
                 return self.take(id).map(|p| Event::Confirmed { id, command: p.command });
             }
             // Already so (Pause on a stopped song): nothing will change to confirm it later.
@@ -358,6 +377,11 @@ mod tests {
             c.answered(again, "element"),
             Some(Event::Confirmed { id: again, command: Command::Repeat { mode: Repeat::All } })
         );
+        let shaped = Command::Eq { on: true, preamp: -3.0, bands: [2.0; 10] };
+        let eq = wire(c.send(shaped.clone(), t));
+        assert_eq!(c.answered(eq, "element"), Some(Event::Confirmed { id: eq, command: shaped }));
+        let loud = Command::Eq { on: true, preamp: 0.0, bands: [30.0; 10] };
+        assert!(matches!(c.send(loud, t), Send::Failed(Event::Failed { failure: Failure::BadArgument, .. })));
         let shuffle = wire(c.send(Command::Shuffle, t));
         assert_eq!(c.answered(shuffle, "element"), Some(Event::Confirmed { id: shuffle, command: Command::Shuffle }));
     }

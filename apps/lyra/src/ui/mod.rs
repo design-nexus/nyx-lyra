@@ -252,11 +252,13 @@ pub fn build(app: &gtk::Application, web: &gtk::Widget) -> gtk::ApplicationWindo
     install_keys(&window);
     this.side.side.follow_window(&window);
     this.side.side.set_collapsed(prefs::get().sidebar_collapsed);
-    window.connect_default_width_notify(|_| {
+    window.connect_default_width_notify(|w| {
         if let Some(u) = ui() {
             u.fit_column()
         }
+        nyx_ui::settings_card::fit(w);
     });
+    window.connect_default_height_notify(nyx_ui::settings_card::fit);
     this.fit_column();
 
     if let Some(p) = player() {
@@ -340,6 +342,9 @@ impl Ui {
             }
             if s.signed_in.is_some() && s.signed_in != self.signed_in.get() {
                 self.side.set_signed_in(s.signed_in == Some(true));
+                if s.signed_in == Some(true) {
+                    crate::quality::ensure();
+                }
             }
             if s.signed_in.is_some() {
                 self.signed_in.set(s.signed_in);

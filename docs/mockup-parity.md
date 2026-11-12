@@ -23,7 +23,7 @@ counts and names are samples; Lyra shows YouTube Music's.
 | Player bar | Cover, song, heart; shuffle, previous, play, next, repeat (pressed when on); seek with times; lyrics, Up next, volume, expand; a pressed control stays pressed and play spins until YouTube Music confirms; Offline and "Reconnecting…" when the page is gone; Sign in signed out; nothing playing dimmed |
 | Now playing | Cover, title with heart and "…", artist and album, seek, the five controls; Up next with "Playing from…", Save queue and Autoplay; Lyrics; Related; it can't open with nothing playing |
 | Mini-player | Cover, song, artist and album, three controls, heart, Open Lyra, the progress line |
-| Settings | Playback (lyrics when available, the column, notifications, output), Account, Background, then Appearance, Keyboard and About |
+| Settings | Playback (lyrics when available, the column, notifications, audio quality, output), Equalizer (added at Ken's request, Nyx Music's), Account, then Appearance, Keyboard and About; the card keeps one size, its page scrolls |
 
 ## Left out, and why
 
@@ -37,6 +37,8 @@ counts and names are samples; Lyra shows YouTube Music's.
   under Lyra's strip.
 - **Settings: Resume on start** (YouTube Music always brings back the last song, paused),
   **Mini-player stays on top** (a Wayland app can't keep itself on top; a Hyprland rule
-  can), **Audio quality** (an account setting YouTube Music's page doesn't expose).
+  can).
+- **Background** ("Keeps playing when closed"): at Ken's choice, closing Lyra quits and
+  stops the music.
 - **Search's album lines** read "Daft Punk" where the mockup has "Album · 2013": Lyra
   shows the artist under album tiles everywhere, as Home's mockup does.

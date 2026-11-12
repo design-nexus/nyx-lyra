@@ -120,7 +120,9 @@ fn snapshot(s: &Playback) -> Snapshot {
         }
     });
     Snapshot {
+        // With YouTube Music gone (the page lost), nothing plays, whatever it last said.
         status: match s.status {
+            _ if s.connection == Connection::Lost => "Stopped",
             Status::Playing | Status::Buffering => "Playing",
             Status::Paused => "Paused",
             Status::Stopped => "Stopped",

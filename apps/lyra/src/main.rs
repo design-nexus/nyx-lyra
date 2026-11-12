@@ -5,10 +5,12 @@ mod art;
 mod cache;
 mod control;
 mod dev;
+mod eq;
 mod icons;
 mod mpris;
 mod player;
 mod prefs;
+mod quality;
 mod runtime;
 mod theme;
 mod ui;
@@ -92,14 +94,10 @@ fn present(app: &gtk::Application) {
     let page = PAGE.with(|w| w.get().cloned()).expect("started");
     let window = ui::build(app, &page);
     let a = app.clone();
-    window.connect_close_request(move |w| {
-        let playing = player().is_some_and(|p| p.state().is_playing());
-        if playing && prefs::get().keep_playing {
-            w.set_visible(false);
-        } else {
-            prefs::flush();
-            a.quit();
-        }
+    // Closing Lyra quits it and stops the music: the page can't keep playing unseen.
+    window.connect_close_request(move |_| {
+        prefs::flush();
+        a.quit();
         glib::Propagation::Stop
     });
     // Tests build the window hidden and show it once the rules are checked (tools/headless.sh).

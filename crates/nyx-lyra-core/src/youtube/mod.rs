@@ -5,7 +5,10 @@
 
 mod parse;
 
-pub use parse::{Lyrics, Next, ParseError, RESULTS, TOP_RESULT, account, channels, logged_in, lyrics, next, page, switch_url};
+pub use parse::{
+    AudioQuality, Lyrics, Next, ParseError, RESULTS, TOP_RESULT, account, audio_quality, channels, logged_in, lyrics, next, page,
+    switch_url,
+};
 
 use serde_json::{Value, json};
 
@@ -38,6 +41,9 @@ pub enum Endpoint {
     /// Save an album or playlist to the library, or take it out.
     Save,
     Unsave,
+    /// YouTube Music's account settings (its Settings dialog), and changing one.
+    GetSetting,
+    SetSetting,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -60,6 +66,8 @@ impl Request {
             Endpoint::Unsubscribe => "subscription/unsubscribe",
             Endpoint::Save => "like/like",
             Endpoint::Unsave => "like/removelike",
+            Endpoint::GetSetting => "account/get_setting",
+            Endpoint::SetSetting => "account/set_setting",
         };
         json!({ "endpoint": endpoint, "body": self.body })
     }
@@ -134,6 +142,21 @@ pub fn save(playlist_id: &str, on: bool) -> Option<Request> {
     valid_id(playlist_id).then(|| Request {
         endpoint: if on { Endpoint::Save } else { Endpoint::Unsave },
         body: json!({ "target": { "playlistId": playlist_id } }),
+    })
+}
+
+/// YouTube Music's account settings, as its Settings dialog asks for them.
+pub fn settings() -> Request {
+    Request { endpoint: Endpoint::GetSetting, body: json!({}) }
+}
+
+/// Set the account's audio quality to one of the options its setting lists (see
+/// [`audio_quality`]): the setting's ID and the option's value, both numbers.
+pub fn set_audio_quality(item: &str, value: &str) -> Option<Request> {
+    let ok = |s: &str| (1..=8).contains(&s.len()) && s.bytes().all(|b| b.is_ascii_digit());
+    (ok(item) && ok(value)).then(|| Request {
+        endpoint: Endpoint::SetSetting,
+        body: json!({ "settingItemId": item, "newValue": { "intValue": value } }),
     })
 }
 
