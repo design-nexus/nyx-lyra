@@ -137,7 +137,7 @@ window.lyra-window .autoplay-card { padding: 10px 12px; border-radius: var(--nyx
 window.lyra-window .lyrics { font-size: 1.3em; font-weight: 500; line-height: 1.5; }
 
 /* Sign-in */
-window.lyra-window .signin-strip { padding: 10px 16px; border-bottom: 1px solid alpha(@theme_text, 0.08); }
+window.lyra-window .signin-strip { padding: 10px 16px; }
 window.lyra-window .signin-lock { color: @theme_accent; -gtk-icon-size: 18px; }
 window.lyra-window .signin-title { font-weight: 600; }
 
