@@ -1254,16 +1254,6 @@ dependencies = [
 [[package]]
 name = "nyx-actions"
 version = "0.1.0"
-source = "git+https://github.com/design-nexus/nyx-core.git?rev=4f05fb8fc92ec211f4e0f0b722fdf29a083c9e89#4f05fb8fc92ec211f4e0f0b722fdf29a083c9e89"
-dependencies = [
- "jsonschema",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "nyx-actions"
-version = "0.1.0"
 source = "git+https://github.com/design-nexus/nyx-core.git?rev=918729504918ec344b3a853a5ce0ea2c9dbb7b5f#918729504918ec344b3a853a5ce0ea2c9dbb7b5f"
 dependencies = [
  "jsonschema",
@@ -1284,26 +1274,12 @@ dependencies = [
 [[package]]
 name = "nyx-core"
 version = "0.1.0"
-source = "git+https://github.com/design-nexus/nyx-core.git?rev=4f05fb8fc92ec211f4e0f0b722fdf29a083c9e89#4f05fb8fc92ec211f4e0f0b722fdf29a083c9e89"
-dependencies = [
- "anyhow",
- "gtk4",
- "nyx-actions 0.1.0 (git+https://github.com/design-nexus/nyx-core.git?rev=4f05fb8fc92ec211f4e0f0b722fdf29a083c9e89)",
- "nyx-peer 0.1.0 (git+https://github.com/design-nexus/nyx-core.git?rev=4f05fb8fc92ec211f4e0f0b722fdf29a083c9e89)",
- "serde",
- "serde_json",
- "toml",
-]
-
-[[package]]
-name = "nyx-core"
-version = "0.1.0"
 source = "git+https://github.com/design-nexus/nyx-core.git?rev=918729504918ec344b3a853a5ce0ea2c9dbb7b5f#918729504918ec344b3a853a5ce0ea2c9dbb7b5f"
 dependencies = [
  "anyhow",
  "gtk4",
- "nyx-actions 0.1.0 (git+https://github.com/design-nexus/nyx-core.git?rev=918729504918ec344b3a853a5ce0ea2c9dbb7b5f)",
- "nyx-peer 0.1.0 (git+https://github.com/design-nexus/nyx-core.git?rev=918729504918ec344b3a853a5ce0ea2c9dbb7b5f)",
+ "nyx-actions",
+ "nyx-peer",
  "serde",
  "serde_json",
  "toml",
@@ -1331,8 +1307,8 @@ dependencies = [
  "async-channel",
  "glib",
  "gtk4",
- "nyx-actions 0.1.0 (git+https://github.com/design-nexus/nyx-core.git?rev=4f05fb8fc92ec211f4e0f0b722fdf29a083c9e89)",
- "nyx-core 0.1.0 (git+https://github.com/design-nexus/nyx-core.git?rev=4f05fb8fc92ec211f4e0f0b722fdf29a083c9e89)",
+ "nyx-actions",
+ "nyx-core",
  "nyx-lyra-core",
  "nyx-theme",
  "nyx-ui",
@@ -1366,11 +1342,6 @@ dependencies = [
 [[package]]
 name = "nyx-peer"
 version = "0.1.0"
-source = "git+https://github.com/design-nexus/nyx-core.git?rev=4f05fb8fc92ec211f4e0f0b722fdf29a083c9e89#4f05fb8fc92ec211f4e0f0b722fdf29a083c9e89"
-
-[[package]]
-name = "nyx-peer"
-version = "0.1.0"
 source = "git+https://github.com/design-nexus/nyx-core.git?rev=918729504918ec344b3a853a5ce0ea2c9dbb7b5f#918729504918ec344b3a853a5ce0ea2c9dbb7b5f"
 
 [[package]]
@@ -1389,7 +1360,7 @@ version = "0.1.0"
 source = "git+https://github.com/design-nexus/nyx-design.git?rev=8b41fb14ec11fa18199d8f4228d267d94dc8e323#8b41fb14ec11fa18199d8f4228d267d94dc8e323"
 dependencies = [
  "gtk4",
- "nyx-core 0.1.0 (git+https://github.com/design-nexus/nyx-core.git?rev=918729504918ec344b3a853a5ce0ea2c9dbb7b5f)",
+ "nyx-core",
  "nyx-theme-core",
  "toml",
 ]
@@ -1400,7 +1371,7 @@ version = "0.2.0"
 source = "git+https://github.com/design-nexus/nyx-design.git?rev=8b41fb14ec11fa18199d8f4228d267d94dc8e323#8b41fb14ec11fa18199d8f4228d267d94dc8e323"
 dependencies = [
  "nyx-config",
- "nyx-core 0.1.0 (git+https://github.com/design-nexus/nyx-core.git?rev=918729504918ec344b3a853a5ce0ea2c9dbb7b5f)",
+ "nyx-core",
  "serde",
  "serde_json",
  "toml",
@@ -1412,7 +1383,7 @@ version = "0.1.0"
 source = "git+https://github.com/design-nexus/nyx-design.git?rev=8b41fb14ec11fa18199d8f4228d267d94dc8e323#8b41fb14ec11fa18199d8f4228d267d94dc8e323"
 dependencies = [
  "gtk4",
- "nyx-core 0.1.0 (git+https://github.com/design-nexus/nyx-core.git?rev=918729504918ec344b3a853a5ce0ea2c9dbb7b5f)",
+ "nyx-core",
  "nyx-desktop",
  "nyx-shell-proto",
  "nyx-theme",
