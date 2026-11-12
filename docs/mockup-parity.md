@@ -11,7 +11,7 @@ counts and names are samples; Lyra shows YouTube Music's.
 | Screen | What's there |
 | --- | --- |
 | Header | Lyra, the page, back and forward; the search field (the theme's `bar-search`, 340 px, "Ctrl F"); mini-player and Settings with the mockup's glyphs; the collapse button in Now playing, where the search is hidden |
-| Sidebar | Home, Explore, Search; Your library (folds away) with Library, Liked Music (count), Artists, Albums, Songs, History; Playlists with "+", All playlists (count) and every playlist; the channel at the foot (photo, name, YouTube Music), which lists the channels to switch to and signs out; signed out, "Sign in · To see your library" |
+| Sidebar | Home, Explore, Search; Your library (folds away) with Library, Liked Music (count), Artists, Albums, Songs, History; Playlists with "+", All playlists (count) and every playlist (only the playlists scroll; the rest stays put); the channel at the foot (photo, name, YouTube Music), which lists the channels to switch to and signs out; signed out, "Sign in · To see your library" |
 | Home | The moods (All first, wrapping); shelves of square tiles 5 across at 1280 px, the first two rows deep, with More and arrows; tile hover play and "…"; song shelves in three columns; the featured card when YouTube Music's Home has a card shelf |
 | Explore | New releases, Charts, Moods & genres as cards; New albums & singles one row; Top songs ranked with how they moved, two columns, "See all"; Moods & genres as coloured tiles |
 | Search | The query in the field; All and the filters; the top result with Shuffle and Radio beside its songs; the results a section per kind (Albums, Artists…) with More opening that filter |
@@ -23,7 +23,8 @@ counts and names are samples; Lyra shows YouTube Music's.
 | Player bar | Cover, song, heart; shuffle, previous, play, next, repeat (pressed when on); seek with times; lyrics, Up next, volume, expand; a pressed control stays pressed and play spins until YouTube Music confirms; Offline and "Reconnecting…" when the page is gone; Sign in signed out; nothing playing dimmed |
 | Now playing | Cover, title with heart and "…", artist and album, seek, the five controls; Up next with "Playing from…", Save queue and Autoplay; Lyrics; Related; it can't open with nothing playing |
 | Mini-player | Cover, song, artist and album, three controls, heart, Open Lyra, the progress line |
-| Settings | Playback (lyrics when available, the column, notifications, audio quality, output), Equalizer (added at Ken's request, Nyx Music's), Account, then Appearance, Keyboard and About; the card keeps one size, its page scrolls |
+| Settings | Playback (lyrics when available, the column, notifications, audio quality, output), Account, then Appearance, Keyboard and About; the card keeps one size, its page scrolls |
+| Equalizer | Added at Ken's request, as Nyx Music's: the header's Equalizer button opens it as its own card (on or off, presets, a preamp and ten bands) |
 
 ## Left out, and why
 

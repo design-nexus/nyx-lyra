@@ -4,6 +4,7 @@
 //! covered by it, and fills the sign-in sheet while signing in.
 
 mod column;
+pub mod equalizer;
 mod expanded;
 mod grid;
 pub mod mini;
@@ -160,6 +161,9 @@ pub fn build(app: &gtk::Application, web: &gtk::Widget) -> gtk::ApplicationWindo
     collapse.set_visible(false);
     collapse.connect_clicked(|_| close_now());
     header.end.append(&collapse);
+    let eq_button = widgets::bar_button("lyra-eq-symbolic", "Equalizer");
+    eq_button.connect_clicked(|_| equalizer::open());
+    header.end.append(&eq_button);
     let mini_button = widgets::bar_button("lyra-mini-symbolic", "Mini-player (Ctrl+M)");
     mini_button.connect_clicked(|_| mini::toggle());
     header.end.append(&mini_button);
@@ -257,8 +261,12 @@ pub fn build(app: &gtk::Application, web: &gtk::Widget) -> gtk::ApplicationWindo
             u.fit_column()
         }
         nyx_ui::settings_card::fit(w);
+        equalizer::fit(w);
     });
-    window.connect_default_height_notify(nyx_ui::settings_card::fit);
+    window.connect_default_height_notify(|w| {
+        nyx_ui::settings_card::fit(w);
+        equalizer::fit(w);
+    });
     this.fit_column();
 
     if let Some(p) = player() {
@@ -742,6 +750,10 @@ pub fn on_key(key: gdk::Key, mods: gdk::ModifierType) -> glib::Propagation {
     let ctrl = mods.contains(gdk::ModifierType::CONTROL_MASK);
     let alt = mods.contains(gdk::ModifierType::ALT_MASK);
     let Some(u) = ui() else { return glib::Propagation::Proceed };
+    if key == gdk::Key::Escape && equalizer::is_open() {
+        equalizer::close();
+        return glib::Propagation::Stop;
+    }
     let focus = gtk::prelude::GtkWindowExt::focus(&u.window);
     // The web page takes typing (Google's sign-in fields, YouTube Music's own).
     let typing = u.search.has_focus() || focus.is_some_and(|f| f.is::<gtk::Text>() || f == u.web || f.is_ancestor(&u.web));

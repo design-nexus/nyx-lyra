@@ -141,6 +141,30 @@ fn handle(player: &Rc<Player>, app: &gtk::Application, line: &str, start: Instan
         "signin" => return crate::ui::dev_signin(),
         "not-now" => return crate::ui::dev_decline(),
         "settings" => return crate::ui::dev_settings(),
+        // Scroll the scroller with this style class to the end, as the wheel would.
+        "scroll" => {
+            fn find(w: &gtk::Widget, class: &str) -> Option<gtk::ScrolledWindow> {
+                if w.has_css_class(class) {
+                    return w.clone().downcast().ok();
+                }
+                let mut c = w.first_child();
+                while let Some(x) = c {
+                    if let Some(f) = find(&x, class) {
+                        return Some(f);
+                    }
+                    c = x.next_sibling();
+                }
+                None
+            }
+            let found = app.active_window().and_then(|w| find(w.upcast_ref(), &s("class")));
+            if let Some(sw) = &found {
+                let a = sw.vadjustment();
+                a.set_value(a.upper() - a.page_size());
+            }
+            return out(json!({ "event": "scroll", "found": found.is_some() }), start);
+        }
+        "equalizer" => return crate::ui::equalizer::open(),
+        "close-equalizer" => return crate::ui::equalizer::close(),
         "close-settings" => return nyx_ui::settings_card::close(),
         "settings-group" => return nyx_ui::settings_card::select(&s("name")),
         "account-menu" => return crate::ui::dev_account_menu(),

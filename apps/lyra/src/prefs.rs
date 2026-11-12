@@ -24,7 +24,7 @@ pub struct Prefs {
     pub notify: bool,
     /// YouTube Music's audio quality option picked in Settings; none keeps the highest.
     pub audio_quality: Option<String>,
-    /// The equalizer (Settings → Equalizer), as Nyx Music's.
+    /// The equalizer (the header's Equalizer button), as Nyx Music's.
     pub eq_enabled: bool,
     pub eq_preamp: f64,
     pub eq_bands: [f64; 10],

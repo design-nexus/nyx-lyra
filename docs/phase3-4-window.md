@@ -53,8 +53,10 @@ here at once and is replaced by YouTube Music's answer. Covers in `~/.cache/nyx-
   Explore and search work; the library asks to sign in) with Sign in in the header;
   Settings → Playback signs in or out (sign-out clears Lyra's web session and cached pages).
 - **Settings** (the shared card, its page scrolling so it keeps one size): Playback
-  (lyrics, the column, notifications, audio quality, output), Equalizer, Account, then
-  Appearance, Keyboard and About.
+  (lyrics, the column, notifications, audio quality, output), Account, then Appearance,
+  Keyboard and About.
+- **Equalizer:** its own card over the window from the header's Equalizer button, as Nyx
+  Music's.
 - **Keys:** Space, Ctrl+←/→, Ctrl+F, Alt+←/→, F, Ctrl+M, Ctrl+B, Esc, Ctrl+, (the list in
   Keyboard). Single keys and Ctrl+←/→ act only when no field or the page has the keyboard.
 

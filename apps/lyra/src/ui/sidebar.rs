@@ -65,8 +65,13 @@ impl Side {
         let all_playlists = Rc::new(sidebar::nav_item("lyra-list-symbolic", "All playlists", "Every playlist in your library"));
         all_playlists.button.connect_clicked(|_| navigate(Route::Library(Tab::Playlists)));
         side.append(&all_playlists.button);
+        // The sidebar stays put; only the playlists scroll, in the room left under the rest.
+        side.scroller.set_vscrollbar_policy(gtk::PolicyType::Never);
         let playlists = gtk::Box::new(gtk::Orientation::Vertical, 1);
-        side.append(&playlists);
+        let playlists_scroll =
+            gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).child(&playlists).build();
+        playlists_scroll.add_css_class("side-playlists");
+        side.append(&playlists_scroll);
         let foot = Foot::new();
         side.append_foot(&foot.root);
         let s = Self { side, items: navs, all_playlists, playlists, playlist_items: Rc::default(), foot };

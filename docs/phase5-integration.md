@@ -81,7 +81,7 @@ at the highest option YouTube Music offers it, unless another is picked in Setti
 Playback. With Premium that is High: the stream is AAC at 256 kbps (`141`), where Normal
 played Opus at about 160 kbps (`251`).
 
-Settings → Equalizer is Nyx Music's: a preamp and ten bands (31 Hz to 16 kHz, ±12 dB)
+The equalizer is Nyx Music's, a card from the header's Equalizer button as in Music: a preamp and ten bands (31 Hz to 16 kHz, ±12 dB)
 with its presets and saved presets. It runs in the page: the bridge routes YouTube Music's
 media element through Web Audio (a gain, ten peaking filters), built the first time it's
 turned on and sent again with each new page. Checked by its output level: flat about 0.1,
