@@ -115,6 +115,12 @@ fn main() -> glib::ExitCode {
         // SAFETY: still single-threaded; nothing else reads the environment yet.
         unsafe { std::env::set_var("GSK_RENDERER", "ngl") };
     }
+    // YouTube Music plays songs in a <video> element, and the page sits hidden under the
+    // native window. WebKit suspends an off-screen video's pipeline before it knows the
+    // stream is audio-only, and never resumes it, so songs (but not music videos) stall at
+    // 0:00. The web process inherits this.
+    // SAFETY: still single-threaded; nothing else reads the environment yet.
+    unsafe { std::env::set_var("WEBKIT_GST_ALLOW_PLAYBACK_OF_INVISIBLE_VIDEOS", "1") };
     glib::set_application_name("Lyra");
     // Started by D-Bus for an action (the nyx command, Glimpse): no window until one's needed.
     let service = std::env::args().any(|a| a == "--gapplication-service");

@@ -80,6 +80,24 @@ fn handle(player: &Rc<Player>, app: &gtk::Application, line: &str, start: Instan
                 bands,
             })
         }
+        // Where the page is and what its media element is doing (for playback checks).
+        "where" => {
+            return player.dev_eval(
+                "JSON.stringify({ url: location.href, media: (() => { const m = document.querySelector('video'); return m && { paused: m.paused, time: m.currentTime, ready: m.readyState, network: m.networkState, error: m.error && m.error.code, src: String(m.currentSrc).slice(0, 40), buffered: m.buffered.length ? [m.buffered.start(0), m.buffered.end(m.buffered.length - 1)] : null }; })() })",
+                Box::new(move |r| out(json!({ "event": "where", "result": r }), start)),
+            );
+        }
+        // The streams YouTube Music offers for the song playing.
+        "formats" => {
+            return player.dev_eval(
+                "JSON.stringify((() => { const p = document.getElementById('movie_player'); const r = p && p.getPlayerResponse ? p.getPlayerResponse() : null; if (!r) return null; const f = (r.streamingData && r.streamingData.adaptiveFormats) || []; return { videoId: r.videoDetails && r.videoDetails.videoId, musicVideoType: r.videoDetails && r.videoDetails.musicVideoType, formats: f.map(x => x.itag + ':' + String(x.mimeType).split(';')[0] + (x.audioQuality ? ':' + x.audioQuality : '') + (x.qualityLabel ? ':' + x.qualityLabel : '')), playability: r.playabilityStatus && r.playabilityStatus.status }; })())",
+                Box::new(move |r| out(json!({ "event": "formats", "result": r }), start)),
+            );
+        }
+        // Any script in the page, for one-off checks.
+        "js" => {
+            return player.dev_eval(&s("code"), Box::new(move |r| out(json!({ "event": "js", "result": r }), start)));
+        }
         "eq-level" => {
             return player.dev_eval(
                 "JSON.stringify(window.__lyraEqLevel ? window.__lyraEqLevel() : 'no bridge')",
@@ -196,7 +214,7 @@ fn handle(player: &Rc<Player>, app: &gtk::Application, line: &str, start: Instan
             }
             return;
         }
-        "search" | "browse" | "browse-with" | "account" | "channels" | "yt-settings" | "up-next" | "more" => {
+        "search" | "browse" | "browse-with" | "account" | "channels" | "yt-settings" | "list-start" | "up-next" | "more" => {
             let req = match s("cmd").as_str() {
                 "search" => youtube::search(&s("query")),
                 "browse" => youtube::browse(&s("id")),
@@ -204,6 +222,7 @@ fn handle(player: &Rc<Player>, app: &gtk::Application, line: &str, start: Instan
                 "account" => Some(youtube::account_menu()),
                 "channels" => Some(youtube::accounts_list()),
                 "yt-settings" => Some(youtube::settings()),
+                "list-start" => youtube::list_start(&s("id")),
                 "more" => youtube::more(&s("token")),
                 _ => youtube::up_next(&s("video"), None),
             };
@@ -220,14 +239,15 @@ fn handle(player: &Rc<Player>, app: &gtk::Application, line: &str, start: Instan
                     }
                     let v = match r {
                         Err(e) => json!({ "event": "data", "kind": kind, "error": e.to_string(), "ms": ms }),
-                        Ok(v) if kind == "up-next" => match youtube::next(&v) {
+                        Ok(v) if kind == "up-next" || kind == "list-start" => match youtube::next(&v) {
                             Ok(n) => json!({ "event": "data", "kind": kind, "ms": ms, "queue": n.queue.len(), "lyrics": n.lyrics, "first": n.queue.first().map(|i| &i.title) }),
                             Err(e) => json!({ "event": "data", "kind": kind, "ms": ms, "error": e.to_string() }),
                         },
                         Ok(v) => match youtube::page(&v) {
                             Ok(p) => json!({ "event": "data", "kind": kind, "ms": ms, "header": p.header.as_ref().map(|h| &h.title), "continuation": p.continuation,
                                 "shelves": p.shelves.iter().map(|s| json!({ "title": s.title, "items": s.items.len(),
-                                    "first": s.items.first().map(|i| json!({ "title": i.title, "kind": i.kind, "playable": i.playable() })) })).collect::<Vec<_>>() }),
+                                    "first": s.items.first().map(|i| json!({ "title": i.title, "kind": i.kind, "playable": i.playable() })),
+                                    "lists": s.items.iter().filter_map(|i| i.playlist_id.as_ref()).take(6).collect::<Vec<_>>() })).collect::<Vec<_>>() }),
                             Err(e) => json!({ "event": "data", "kind": kind, "ms": ms, "error": e.to_string() }),
                         },
                     };

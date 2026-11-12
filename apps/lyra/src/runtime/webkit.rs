@@ -127,6 +127,15 @@ impl WebRuntime {
             true
         });
         view.connect_create(|_, _| None);
+        // The page is never seen, so a dialog would wait for an answer forever with the page
+        // stopped behind it: YouTube Music asks before leaving a page that's playing, and
+        // Lyra loads a new one to play something else.
+        view.connect_script_dialog(|_, dialog| {
+            if dialog.dialog_type() == webkit6::ScriptDialogType::BeforeUnloadConfirm {
+                dialog.confirm_set_confirmed(true);
+            }
+            true
+        });
         view.connect_permission_request(|_, request| {
             request.deny();
             true

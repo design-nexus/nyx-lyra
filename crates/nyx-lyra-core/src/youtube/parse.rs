@@ -690,6 +690,10 @@ pub fn next(v: &Value) -> Result<Next, ParseError> {
 fn collect_panel(v: &Value, out: &mut Vec<(Item, bool)>) {
     match v {
         Value::Object(o) => {
+            // A song with a music video lists both; the counterpart is the one not queued.
+            if let Some(w) = o.get("playlistPanelVideoWrapperRenderer") {
+                return collect_panel(w.get("primaryRenderer").unwrap_or(&Value::Null), out);
+            }
             if let Some(r) = o.get("playlistPanelVideoRenderer") {
                 let byline = runs(r.get("longBylineText"));
                 let (artists, album) = people(byline);

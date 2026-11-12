@@ -151,8 +151,11 @@ fn up_next_and_lyrics() {
             { "playlistPanelVideoRenderer": { "title": { "runs": [ { "text": "Midnight City" } ] }, "videoId": "dX3k_QDnzHE", "selected": true,
                 "lengthText": { "runs": [ { "text": "4:03" } ] },
                 "longBylineText": { "runs": [ { "text": "M83", "navigationEndpoint": browse_ep("UC_m83", "MUSIC_PAGE_TYPE_ARTIST") } ] } } },
-            { "playlistPanelVideoRenderer": { "title": { "runs": [ { "text": "Reunion" } ] }, "videoId": "r3un10n_M83",
-                "lengthText": { "runs": [ { "text": "3:55" } ] } } } ] } } } } } },
+            { "playlistPanelVideoWrapperRenderer": {
+                "primaryRenderer": { "playlistPanelVideoRenderer": { "title": { "runs": [ { "text": "Reunion" } ] }, "videoId": "r3un10n_M83",
+                    "lengthText": { "runs": [ { "text": "3:55" } ] } } },
+                "counterpart": [ { "counterpartRenderer": { "playlistPanelVideoRenderer": {
+                    "title": { "runs": [ { "text": "Reunion (Official Video)" } ] }, "videoId": "r3un10n_omv" } } } ] } } ] } } } } } },
         { "tabRenderer": { "title": "Lyrics", "endpoint": { "browseEndpoint": { "browseId": "MPLYt_x" } } } },
         { "tabRenderer": { "title": "Related", "endpoint": { "browseEndpoint": { "browseId": "MPTRt_x" } } } }
     ] } } } } });

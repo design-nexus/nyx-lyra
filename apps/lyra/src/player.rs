@@ -185,6 +185,30 @@ impl Player {
         self.play_ids(item.video_id.clone(), item.playlist_id.clone())
     }
 
+    /// Play a list from the first song on its page.
+    fn play_from_page(self: &Rc<Self>, list: String) {
+        let Some(req) = nyx_lyra_core::youtube::browse(&format!("VL{}", list.trim_start_matches("VL"))) else {
+            return eprintln!("nyx-lyra: couldn't find the first song of {list}");
+        };
+        let me = Rc::downgrade(self);
+        self.request(
+            &req,
+            Box::new(move |r| {
+                let Some(p) = me.upgrade() else { return };
+                let first = r
+                    .ok()
+                    .and_then(|v| nyx_lyra_core::youtube::page(&v).ok())
+                    .and_then(|page| page.shelves.into_iter().flat_map(|s| s.items).find_map(|i| i.video_id));
+                match first {
+                    Some(v) => {
+                        p.play_ids(Some(v), Some(list));
+                    }
+                    None => eprintln!("nyx-lyra: couldn't find the first song of {list}"),
+                }
+            }),
+        );
+    }
+
     pub fn play_ids(self: &Rc<Self>, video_id: Option<String>, playlist_id: Option<String>) -> bool {
         // A list alone gives the page nothing to start: find its first song, as YouTube
         // Music's own Play does, and play that in the list.
@@ -204,7 +228,9 @@ impl Player {
                         Some(v) => {
                             p.play_ids(Some(v), Some(list));
                         }
-                        None => eprintln!("nyx-lyra: couldn't find the first song of {list}"),
+                        // Your own playlists come back with an empty queue until one of their
+                        // songs plays.
+                        None => p.play_from_page(list),
                     }
                 }),
             );
