@@ -113,7 +113,7 @@ fn main() -> glib::ExitCode {
     // GTK's Vulkan renderer wakes a sleeping discrete GPU on hybrid laptops; GL doesn't.
     if std::env::var_os("GSK_RENDERER").is_none() {
         // SAFETY: still single-threaded; nothing else reads the environment yet.
-        unsafe { std::env::set_var("GSK_RENDERER", "ngl") };
+        unsafe { std::env::set_var("GSK_RENDERER", "gl") };
     }
     // YouTube Music plays songs in a <video> element, and the page sits hidden under the
     // native window. WebKit suspends an off-screen video's pipeline before it knows the
