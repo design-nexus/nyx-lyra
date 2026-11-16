@@ -21,7 +21,7 @@ const SPEC: Spec = Spec {
             name: "Lyra",
             icon: "io.github.design_nexus.nyx.Lyra",
             version: env!("CARGO_PKG_VERSION"),
-            description: "YouTube Music for NyxOS, through YouTube Music's own web player.",
+            description: "An unofficial YouTube Music app for NyxOS, through YouTube Music's own web player. Not made or endorsed by Google, which can change the service at any time.",
             licence: "MIT",
             website: "https://github.com/design-nexus/nyx-lyra",
             issues: "https://github.com/design-nexus/nyx-lyra/issues",

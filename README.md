@@ -1,9 +1,12 @@
 # Lyra
 
-YouTube Music for NyxOS, in GTK4 and Nyx Design 2.0. Lyra plays through YouTube Music's own
-web player in WebKitGTK 6.0 and is separate from Nyx Music (local music, radio, podcasts).
+An unofficial YouTube Music app for NyxOS, in GTK4 and Nyx Design 2.0. Lyra plays through
+YouTube Music's own web player in WebKitGTK 6.0 and is separate from Nyx Music (local music,
+radio, podcasts). It isn't made or endorsed by Google, and reads YouTube Music's own web
+replies, so a change on their side can break browsing until Lyra's parser catches up; CI
+runs the parser against fixtures of those replies.
 
-In progress. The native window (nyx-design's `mockups/lyra`, direction A) has Home, Explore,
+The native window (nyx-design's `mockups/lyra`, direction A) has Home, Explore,
 Search, the library, albums, artists and playlists, the now-playing column, the player bar,
 Now playing with Up next, Lyrics and Related, and the strip mini-player, all from YouTube
 Music's own data. Media keys, the bar and Control Center reach it through its MPRIS player;
