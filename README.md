@@ -15,6 +15,8 @@ the Assistant through its actions.
 
 ## Install
 
+On NyxOS, choose Lyra in Welcome when you set up, or install it later from the Store or with `nyx install nyx-lyra`. On Omarchy, from a checkout:
+
 ```sh
 ./install.sh
 ```
